@@ -1,0 +1,1910 @@
+---
+bibliography: data_summaries.bib
+biblio-style: apalike
+link-citations: yes
+output:  
+  bookdown::html_document2:
+    theme: default
+    highlight: textmate
+    code_folding: show
+    mathjax: local
+    self_contained: FALSE
+    number_sections: FALSE
+---
+
+<!-- To Do -->
+
+<!-- What if no label? -->
+<!-- Add in variable name -->
+<!-- Error on not having difftime units defined for date objects -->
+<!-- Don't know how to automatically pick scale for object of type labelled/integer. Defaulting to continuous. -->
+
+# Introduction
+
+An essential part of any data analysis project is to understand the data at hand.  For this task, we will create a function that takes as input a variable from the data, a categorical variable to describe by, and returns summary tables and plots.
+
+This presentation will use the R programming language and assume the user is using Rstudio to compile their R markdown files into HTML [@Rlang2019; @Rstudio].  If you want to follow along with the R markdown, it can be downloaded <a href="https://waderstats.com/rstudio-files/data_summaries/data_summaries.Rmd" target="_blank">here</a>.  The associated bibliography file is <a href="https://waderstats.com/rstudio-files/data_summaries/data_summaries.bib" target="_blank">here</a>.
+
+# Required Libraries
+
+The libraries <i>knitr</i>, <i>bookdown</i>, and <i>kableExtra</i> are used to generate the HTML output [@knitr; @bookdown; @kableExtra].  The <i>ggplot2</i> library is loaded for the example data set that is used in this presentation [@ggplot2].  The <i>Hmisc</i> library provides functionality needed to create variable labels [@Hmisc].  The libraries <i>reshape2</i> and <i>dplyr</i> are loaded for their data manipulation funtions [@dplyr; @reshape2].
+
+```{r libraries, eval = TRUE, echo = TRUE, results = FALSE, warning = FALSE, message = FALSE}
+package_loader <- function(x, ...) {
+  if (x %in% rownames(installed.packages()) == FALSE) install.packages(x)
+  library(x, ...)
+}
+
+packages <- c("knitr", "bookdown", "kableExtra", "ggplot2", "Hmisc", "reshape2", "dplyr")
+
+invisible(sapply(X = packages, FUN = package_loader, character.only = TRUE))
+```
+
+# Example Data Setup
+
+The data set used in this presentation is <b>mpg</b> from the <i>ggplot2</i> package.  From the description in the manual:
+
+> This dataset contains a subset of the fuel economy data that the EPA makes available <a href="http://fueleconomy.gov" target="_blank">here</a>. It contains only models which had a new release every year between 1999 and 2008 - this was used as a proxy for the popularity of the car.
+
+```{r ExampleDataSetup, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+set.seed(123)
+data(mpg)
+mpg <- data.frame(mpg)
+
+colnames(mpg)[which(colnames(mpg) == "manufacturer")] <- "manu"
+
+mpg$manu <- factor(mpg$manu)
+mpg$model <- factor(mpg$model)
+mpg$displ <- as.numeric(mpg$displ)
+mpg$year <- factor(mpg$year, levels = c("1999", "2008"), ordered = TRUE)
+
+mpg$dp <- as.Date(NA, origin = "1970-01-01")
+mpg$dp[which(mpg$year == "1999")] <- sample(seq(as.Date('1999-01-01', format = "%Y-%m-%d", origin = "1970-01-01"), as.Date('1999-12-25', format = "%Y-%m-%d", origin = "1970-01-01"), by="day"), dim(mpg)[1]/2)
+mpg$dp[which(mpg$year == "2008")] <- sample(seq(as.Date('2008-01-01', format = "%Y-%m-%d", origin = "1970-01-01"), as.Date('2008-12-25', format = "%Y-%m-%d", origin = "1970-01-01"), by="day"), dim(mpg)[1]/2)
+mpg$dp[sample(1:length(mpg$dp), size = 20)] <- NA
+mpg$dp[10] <- as.Date('1000-05-02', format = "%Y-%m-%d", origin = "1970-01-01")
+
+mpg$cyl <- factor(mpg$cyl, levels = c(4, 5, 6, 8), ordered = TRUE)
+mpg$trans <- factor(mpg$trans)
+mpg$drv <- factor(mpg$drv, levels = c("f", "r", "4"), labels = c("front-wheel drive", "rear wheel drive", "4wd"))
+mpg$fl <- factor(mpg$fl)
+mpg$class <- factor(mpg$class)
+
+mpg$rn <- rnorm(dim(mpg)[1], mean = 10, sd = 5)
+mpg$rn[sample(1:length(mpg$rn), size = 50)] <- NA
+
+mpg$rdifftime <- rnorm(dim(mpg)[1], mean = 10, sd = 5)
+mpg$rdifftime[sample(1:length(mpg$rdifftime), size = 50)] <- NA
+mpg$rdifftime <- as.difftime(mpg$rdifftime, units = "weeks")
+mpg$rdifftime[which(mpg$rdifftime < 0)] <- 0
+
+mpg$logical <- mpg$rdifftime >= 10
+
+mpg$party <- factor(sample(c("republican", "democrat", "independent", NA), dim(mpg)[1], replace = TRUE), levels = c("republican", "democrat", "independent"))
+
+mpg$comments <- sample(c("I like this car!", "Meh.", "This is the worst car ever!", "Does it come in green?", "want cheese flavoured cars.", "Does it also fly?", "Blah, Blah, Blah, Blah, Blah, Blah, Blah, Blah", "Missing", ".", NA), dim(mpg)[1], replace = TRUE)
+
+mpg$miss <- NA
+
+label(mpg$manu) <- "manufacturer"
+label(mpg$model) <- "model name"
+label(mpg$displ) <- "engine displacement, in litres"
+label(mpg$year) <- "year of manufacture"
+label(mpg$dp) <- "date of purchase"
+label(mpg$cyl) <- "number of cylinders"
+label(mpg$trans) <- "type of transmission"
+label(mpg$drv) <- "drive type"
+label(mpg$cty) <- "city miles per gallon"
+label(mpg$hwy) <- "highway miles per gallon"
+label(mpg$fl) <- "fuel type"
+label(mpg$class) <- "type of car"
+label(mpg$rn) <- "some random numbers that are generated from a normal distrubtion with mean = 10 and sd = 5"
+label(mpg$rdifftime) <- "some random numbers that are generated from a normal distrubtion with mean = 10 and sd = 5, and then converted to weeks"
+label(mpg$logical) <- "some random numbers that are generated from a normal distrubtion with mean = 10 and sd = 5, and then converted to weeks, and then set to TRUE if the difference is greater than 10"
+label(mpg$party) <- "some random political parties"
+label(mpg$comments) <- "some random comments"
+label(mpg$miss) <- "an all missing variable"
+
+kable(head(mpg), caption = "Header of <b>mpg</b>.", booktabs = TRUE, escape = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+
+# Data Summary Function
+
+Below are a set of functions I wrote to using S4 (see <a href="https://www.cyclismo.org/tutorial/R/s4Classes.html" target="_blank">https://www.cyclismo.org/tutorial/R/s4Classes.html</a> for a gentle introduction to object oriented programming in R), culminating into a single function called <b>data_summary</b>.  The basic structure uses an object of class <i>dataSummaries</i> and then, based on the class of <b>x</b>, the <i>dataSummariesSetup</i> method applied to the <i>dataSummaries</i> class, returns an object of class <i>dataSummariesCharacter</i>, <i>dataSummariesNumeric</i>, <i>dataSummariesDate</i>, or <i>dataSummariesDifftime</i>.  Each of these four output classes inherits from the <i>dataSummaries</i> class; thus any method written for <i>dataSummaries</i> also applies to the four classes that inherit from it.
+
+As input the <b>data_summary</b> function takes a variable to summarize (<b>x</b>), an optional variable or variables (as a character string) to summarize by (<b>by</b>), the data (<b>data</b>), and the units to use for <i>difftime</i> if <b>x</b> refers to a <i>Date</i> or <i>difftime</i> object in the <b>data</b>.
+
+As output, the function returns an object of class <i>dataSummaries</i>.  The function has a <i>show</i> method and a method called <i>make_output</i> that generates <i>knitr</i> friendly output.  The summary table and plot can also be accessed individually through their accessor functions, <i>data_summary_table</i>, and <i>data_summary_plot</i>, respectively.
+
+If you find any bugs or have recommendations, let me know in the comments!
+
+```{r dataSummaryFun, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+setOldClass(c("gg", "ggplot"))
+
+dataSummaries <- setClass(
+  "dataSummaries",
+  
+  slots = c(
+    x = "character",
+    by = "character",
+    data = "data.frame",
+    difftime_units = "character",
+    xLab = "character",
+    byLab = "character",
+    table = "data.frame",
+    plot = "ggplot"
+  ),
+  
+  prototype = list(
+    x = character(0),
+    by = character(0),
+    data = data.frame(),
+    difftime_units = character(0),
+    xLab = character(0),
+    byLab = character(0),
+    table = data.frame(),
+    plot = ggplot()
+  )
+)
+
+dataSummariesCharacter <- setClass(
+  "dataSummariesCharacter",
+  
+  slots = c(
+    type = "character"
+  ),
+  
+  prototype = list(
+    type = character(0)
+  ),
+  
+  contains = "dataSummaries"
+)
+
+dataSummariesNumeric <- setClass(
+  "dataSummariesNumeric",
+  
+  slots = c(
+    type = "character"
+  ),
+  
+  prototype = list(
+    type = character(0)
+  ),
+  
+  contains = "dataSummaries"
+)
+
+dataSummariesDate <- setClass(
+  "dataSummariesDate",
+  
+  slots = c(
+    type = "character"
+  ),
+  
+  prototype = list(
+    type = character(0)
+  ),
+  
+  contains = "dataSummaries"
+)
+
+dataSummariesDifftime <- setClass(
+  "dataSummariesDifftime",
+  
+  slots = c(
+    type = "character"
+  ),
+  
+  prototype = list(
+    type = character(0)
+  ),
+  
+  contains = "dataSummaries"
+)
+
+invisible(setGeneric(name = "dataSummariesSetup", def = function(object) standardGeneric("dataSummariesSetup")))
+setMethod(f = "dataSummariesSetup",
+          signature = "dataSummaries", 
+          definition = function(object) 
+          {
+            x = object@x
+            by = object@by
+            data = object@data
+            
+            xLab <- label(data[, x])
+            colnames(data)[which(colnames(data) == x)] <- "var"
+            
+            if (length(by) == 0) {
+              data$by <- factor(data$by <- "")
+              label(data$by) <- ""
+              byLab <- label(data$by)
+            } else {
+              data$by <- interaction(data[, by], sep = ", ")
+              byLab <- paste(label(data[, by]), collapse = " by ")
+              
+              overall <- data
+              overall$by <- "Overall"
+              data <- rbind(data, overall)
+            }
+            
+            data <- data[, c("var", "by")]
+            
+            if("labelled" %in% class(data$var)) {
+              class(data$var) <- class(data$var)[(-1)*which(class(data$var) == "labelled")]
+            }
+            
+            object@xLab <- xLab
+            object@byLab <- byLab
+            object@data <- data
+            
+            if (any(c("character", "factor", "logical") %in% class(data$var))) { 
+              return(dataSummariesCharacter(object, type = class(data$var)))
+            } else if (any(c("numeric", "integer") %in% class(data$var))) {
+              return(dataSummariesNumeric(object, type = class(data$var))) 
+            } else if ("Date" %in% class(data$var)) {
+              if (length(object@difftime_units) == 0) stop("You need to specify the units for the difference in time.  See help(difftime) for additional information.")
+              return(dataSummariesDate(object, type = class(data$var))) 
+            } else if ("difftime" %in% class(data$var)) {
+              if (length(object@difftime_units) == 0) stop("You need to specify the units for the difference in time.  See help(difftime) for additional information.")
+              return(dataSummariesDifftime(object, type = class(data$var))) 
+            } else {
+              stop("x is an unsupported class")
+            }
+          }
+)
+
+invisible(setGeneric(name = "data_summary_switch", def = function(object) standardGeneric("data_summary_switch")))
+
+setMethod(f = "data_summary_switch",
+          signature = "dataSummariesCharacter", 
+          definition = function(object) 
+          {
+            xLab <- object@xLab
+            byLab <- object@byLab
+            data <- object@data
+            
+            freqs <- table(data$var, data$by, useNA = "ifany", dnn = c(xLab, byLab))
+            
+            rownames(freqs)[which(is.na(rownames(freqs)))] <- "R NA Value"
+            colnames(freqs)[which(is.na(colnames(freqs)))] <- "R NA Value" 
+            
+            props <- round(100*prop.table(freqs, 2), 2)
+            
+            res <- freqs
+            for (i in 1:dim(freqs)[2]) {
+              res[, i] <- paste(freqs[, i], " (", props[, i], "%)", sep = "")
+            }
+            res <- as.data.frame(res)
+            colnames(res) <- c("var", "by", "freq")
+            res <- dcast(res, var ~ by, value.var = "freq")
+            colnames(res)[1] <- xLab
+            if (byLab == "") colnames(res)[2] <- "n (%)"
+            
+            pData <- as.data.frame(props)
+            colnames(pData) <- c("var", "by", "freq")
+            
+            levs <- as.character(pData$var)
+            tmp <- nchar(levs)
+            strCombRes <- list()
+            for (k in 1:length(levs)) {
+              strRes <- list()
+              j = 0
+              for (i in 1:ceiling(max(tmp)/30)) {
+                strRes[[i]] <- substr(levs[k], j, 30*i)
+                j = 30*i + 1
+              }
+              strCombRes[[k]] <- unlist(strRes)    
+            }
+            
+            foo <- function(x) {
+              if (!(length(which(x == "")) == 0)) x <- x[-1*which(x == "")]
+              x <- paste(x, collapse = "\n")
+              
+              return(x)
+            }
+            
+            levs <- unlist(lapply(strCombRes, foo))
+            
+            pData$names <- factor(rownames(pData), levels = rownames(pData), labels = levs)
+            pData <- pData[, -1]
+            
+            colfunc <- colorRampPalette(c("#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00"))
+            colors <- colfunc(length(levels(pData$names)))
+            
+            p = ggplot(data = pData, aes(x = by, y = freq, fill = names)) +
+              scale_fill_manual(values = colors) + 
+              geom_bar(stat = "identity") + 
+              xlab(paste(strwrap(xLab, width = 60), collapse = "\n")) +
+              ylab("Percent") +
+              theme(axis.line = element_line(colour = "black"),
+                    panel.border = element_rect(colour = "black", fill = NA, size = 1),
+                    axis.text = element_text(size = 12),
+                    axis.text.x = element_text(angle = 50, hjust = 1),
+                    axis.title = element_text(size = 12),
+                    legend.title = element_blank(),
+                    legend.position = "right",
+                    panel.grid = element_line(color = "lightgray"),
+                    panel.background = element_rect(fill = "white", colour = "white"))
+            
+            object@table <- res
+            object@plot <- p
+            
+            return(object)
+          }
+)
+
+setMethod(f = "data_summary_switch",
+          signature = "dataSummariesNumeric", 
+          definition = function(object) 
+          {
+            xLab <- object@xLab
+            byLab <- object@byLab
+            data <- object@data
+            
+            if (any(is.na(data$by))) {
+              byLevs <- levels(data$by)
+              data$by <- as.character(data$by)
+              
+              data$by[which(is.na(as.character(data$by)))] <- "R NA Value"
+              data$by <- factor(data$by, levels = c(byLevs, "R NA Value"))
+            }
+            
+            percMiss <- function(x) res <- round((length(which(is.na(x)))/length(x))*100, 2)
+            
+            res <- data %>%
+              group_by(by) %>%
+              summarize(label = xLab,
+                        n = length(na.omit(var)),
+                        miss = percMiss(var),
+                        mean = round(mean(var, na.rm = TRUE), 2),
+                        sd = round(sd(var, na.rm = TRUE), 2),
+                        median = round(median(var, na.rm = TRUE), 2),
+                        mad = round(mad(var, na.rm = TRUE), 2),
+                        q25 = round(quantile(var, probs = 0.25, na.rm = TRUE, type = 1), 2),
+                        q75 = round(quantile(var, probs = 0.75, na.rm = TRUE, type = 1), 2),
+                        IQR = round(IQR(var, na.rm = TRUE), 2),
+                        min = round(min(var, na.rm = TRUE), 2),
+                        max = round(max(var, na.rm = TRUE), 2)
+              )
+            
+            res <- data.frame(res)
+            
+            colnames(res) <- c(byLab, "Label", "N", "P NA", "Mean", "S Dev", "Med", "MAD", "25th P", "75th P", "IQR", "Min", "Max")
+            
+            pData <- na.omit(data.frame(data[, c("var", "by")]))
+            
+            p = ggplot(data = pData, aes(x = by, y = var)) +
+              geom_boxplot(position = position_dodge(1), fill = "#2c7bb6") +
+              xlab(byLab) +
+              ylab(paste(strwrap(xLab, width = 40), collapse = "\n")) +
+              theme(axis.line = element_line(colour = "black"),
+                    panel.border = element_rect(colour = "black", fill = NA, size = 1),
+                    legend.position = "none",
+                    axis.text = element_text(size = 12),
+                    axis.text.x = element_text(angle = 50, hjust = 1),
+                    axis.title = element_text(size = 12), 
+                    panel.grid = element_line(color = "lightgray"),
+                    panel.background = element_rect(fill = "white", colour = "white"))
+            
+            object@table <- res
+            object@plot <- p
+            
+            return(object)
+          }
+)
+
+setMethod(f = "data_summary_switch",
+          signature = "dataSummariesDate", 
+          definition = function(object) 
+          {
+            xLab <- object@xLab
+            byLab <- object@byLab
+            data <- object@data
+            difftime_units <- object@difftime_units
+            
+            if (any(is.na(data$by))) {
+              byLevs <- levels(data$by)
+              data$by <- as.character(data$by)
+              
+              data$by[which(is.na(as.character(data$by)))] <- "R NA Value"
+              data$by <- factor(data$by, levels = c(byLevs, "R NA Value"))
+            }
+            
+            percMiss <- function(x) round((length(which(is.na(x)))/length(x))*100, 2)
+            
+            sdDate <- function(x) {
+              res <- as.difftime(sd(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+              units(res) <- difftime_units
+              return(res)
+            }
+            
+            madDate <- function(x) {
+              res <- as.difftime(mad(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+              units(res) <- difftime_units
+              return(res)
+            }
+            
+            q25Date <- function(x) as.Date(quantile(as.numeric(x), probs = 0.25, na.rm = TRUE, type = 1), origin = "1970-01-01")
+            
+            q75Date <- function(x) as.Date(quantile(as.numeric(x), probs = 0.75, na.rm = TRUE, type = 1), origin = "1970-01-01")
+            
+            IQRdate <- function(x) {
+              res <- as.difftime(IQR(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+              units(res) <- difftime_units
+              return(res)
+            }
+            
+            res <- data %>%
+              group_by(by) %>%
+              summarize(label = xLab,
+                        n = length(na.omit(var)),
+                        miss = percMiss(var),
+                        mean = round(mean(var, na.rm = TRUE), 2),
+                        sd = round(sdDate(var), 2),
+                        median = round(median(var, na.rm = TRUE), 2),
+                        mad = round(madDate(var), 2),
+                        q25 = round(q25Date(var), 2),
+                        q75 = round(q75Date(var), 2),
+                        IQR = round(IQRdate(var), 2),
+                        min = round(min(var, na.rm = TRUE), 2),
+                        max = round(max(var, na.rm = TRUE), 2)
+              )
+            
+            res <- data.frame(res)
+            
+            colnames(res) <- c(byLab, "Label", "N", "P NA", "Mean", "S Dev", "Med", "MAD", "25th P", "75th P", "IQR", "Min", "Max")
+            
+            pData <- na.omit(data.frame(data[, c("var", "by")]))
+            
+            p = ggplot(data = pData, aes(x = by, y = var)) +
+              geom_boxplot(position = position_dodge(1), fill = "#2c7bb6") +
+              xlab(byLab) +
+              ylab(paste(strwrap(xLab, width = 40), collapse = "\n")) +
+              theme(axis.line = element_line(colour = "black"),
+                    panel.border = element_rect(colour = "black", fill = NA, size = 1),
+                    legend.position = "none",
+                    axis.text = element_text(size = 12),
+                    axis.text.x = element_text(angle = 50, hjust = 1),
+                    axis.title = element_text(size = 12), 
+                    panel.grid = element_line(color = "lightgray"),
+                    panel.background = element_rect(fill = "white", colour = "white"))
+            
+            if(dim(pData)[1] != 0) p = p + scale_y_date(limits = c(min(pData$var),  max(pData$var)))
+            if(dim(pData)[1] == 0) p = p + scale_y_date(limits = NULL)
+
+            object@table <- res
+            object@plot <- p
+            
+            return(object)
+          }
+)
+
+setMethod(f = "data_summary_switch",
+          signature = "dataSummariesDifftime", 
+          definition = function(object) 
+          {
+            xLab <- object@xLab
+            byLab <- object@byLab
+            data <- object@data
+            difftime_units <- object@difftime_units
+            
+            if (any(is.na(data$by))) {
+              byLevs <- levels(data$by)
+              data$by <- as.character(data$by)
+              
+              data$by[which(is.na(as.character(data$by)))] <- "R NA Value"
+              data$by <- factor(data$by, levels = c(byLevs, "R NA Value"))
+            }
+            
+            percMiss <- function(x) res <- round((length(which(is.na(x)))/length(x))*100, 2)
+            
+            units(data$var) <- "days"
+            
+            meanDate <- function(x) {
+              res <- mean(x, na.rm = TRUE)
+              units(res) <- difftime_units
+              return(res)
+            }
+            
+            medianDate <- function(x) {
+              res <- median(x, na.rm = TRUE)
+              units(res) <- difftime_units
+              return(res)
+            }
+            
+            sdDate <- function(x) {
+              res <- as.difftime(sd(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+              units(res) <- difftime_units
+              return(res)
+            }
+            
+            madDate <- function(x) {
+              res <- as.difftime(mad(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+              units(res) <- difftime_units
+              return(res)
+            }
+            
+            q25Date <- function(x) {
+              res <- as.difftime(quantile(as.numeric(x), probs = 0.25, na.rm = TRUE, type = 1), units = "days")
+              units(res) <- difftime_units
+              return(res)
+            }
+            
+            q75Date <- function(x) {
+              res <- as.difftime(quantile(as.numeric(x), probs = 0.75, na.rm = TRUE, type = 1), units = "days")
+              units(res) <- difftime_units
+              return(res)
+            }
+            
+            IQRdate <- function(x) {
+              res <- as.difftime(IQR(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+              units(res) <- difftime_units
+              return(res)
+            }
+            
+            minDate <- function(x) {
+              res <- as.difftime(min(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+              units(res) <- difftime_units
+              return(res)
+            }
+            
+            maxDate <- function(x) {
+              res <- as.difftime(max(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+              units(res) <- difftime_units
+              return(res)
+            }  
+            
+            res <- data %>%
+              group_by(by) %>%
+              summarize(label = xLab,
+                        n = length(na.omit(var)),
+                        miss = percMiss(var),
+                        mean = round(meanDate(var), 2),
+                        sd = round(sdDate(var), 2),
+                        median = round(medianDate(var), 2),
+                        mad = round(madDate(var), 2),
+                        q25 = round(q25Date(var), 2),
+                        q75 = round(q75Date(var), 2),
+                        IQR = round(IQRdate(var), 2),
+                        min = round(minDate(var), 2),
+                        max = round(maxDate(var), 2)
+              )
+            
+            res <- data.frame(res)
+            
+            colnames(res) <- c(byLab, "Label", "N", "P NA", "Mean", "S Dev", "Med", "MAD", "25th P", "75th P", "IQR", "Min", "Max")
+            
+            pData <- na.omit(data.frame(data[, c("var", "by")]))
+            units(pData$var) <- difftime_units
+            
+            p = ggplot(data = pData, aes(x = by, y = var)) +
+              geom_boxplot(position = position_dodge(1), fill = "#2c7bb6") +
+              xlab(byLab) +
+              ylab(paste(strwrap(xLab, width = 40), collapse = "\n")) +
+              theme(axis.line = element_line(colour = "black"),
+                    panel.border = element_rect(colour = "black", fill = NA, size = 1),
+                    legend.position = "none",
+                    axis.text = element_text(size = 12),
+                    axis.text.x = element_text(angle = 50, hjust = 1),
+                    axis.title = element_text(size = 12), 
+                    panel.grid = element_line(color = "lightgray"),
+                    panel.background = element_rect(fill = "white", colour = "white"))
+            
+            object@table <- res
+            object@plot <- p
+            
+            return(object)
+          }
+)
+
+setMethod(f = "show",
+          signature = "dataSummaries", 
+          definition = function(object) 
+          {
+            print(object@table)
+            print(object@plot)
+          }
+)
+
+invisible(setGeneric(name = "make_kable_output", def = function(object) standardGeneric("make_kable_output")))
+setMethod(f = "make_kable_output",
+          signature = "dataSummaries", 
+          definition = function(object) 
+          {
+            if(object@byLab == "") {
+              print(kable(object@table, caption = paste("Summary statistics of ", object@xLab, ".", sep = ""), booktabs = TRUE) %>% 
+                      kable_styling(bootstrap_options = c("striped", "hover")))
+            } else {
+              print(kable(object@table, caption = paste("Summary statistics of ", object@xLab, " by ", object@byLab, ".", sep = ""), booktabs = TRUE) %>% 
+                      kable_styling(bootstrap_options = c("striped", "hover")))
+            }
+          }
+)
+
+invisible(setGeneric(name = "make_complete_output", def = function(object) standardGeneric("make_complete_output")))
+setMethod(f = "make_complete_output",
+          signature = "dataSummaries", 
+          definition = function(object) 
+          {
+            if(object@byLab == "") {
+              print(kable(object@table, caption = paste("Summary statistics of ", object@xLab, ".", sep = ""), booktabs = TRUE) %>% 
+                      kable_styling(bootstrap_options = c("striped", "hover")))
+            } else {
+              print(kable(object@table, caption = paste("Summary statistics of ", object@xLab, " by ", object@byLab, ".", sep = ""), booktabs = TRUE) %>% 
+                      kable_styling(bootstrap_options = c("striped", "hover")))
+            }
+            
+            print(object@plot)
+          }
+)
+
+invisible(setGeneric(name = "data_summary_table", def = function(object) standardGeneric("data_summary_table")))
+setMethod(f = "data_summary_table",
+          signature = "dataSummaries", 
+          definition = function(object) 
+          {
+            object@table
+          }
+)
+
+invisible(setGeneric(name = "data_summary_plot", def = function(object) standardGeneric("data_summary_plot")))
+setMethod(f = "data_summary_plot",
+          signature = "dataSummaries", 
+          definition = function(object) 
+          {
+            object@plot
+          }
+)
+
+data_summary <- function(x, by = character(0), data, difftime_units = character(0)) {
+  object = dataSummaries(x = x, data = data, by = by, difftime_units = difftime_units)
+  object = dataSummariesSetup(object)
+  object = data_summary_switch(object)
+}
+```
+
+# Examples {.tabset .tabset-fade .tabset-pills}
+
+## Categorical {.tabset .tabset-fade .tabset-pills}
+
+For a categorical variable <b>x</b>, we only need to specify <b>x</b> and the <b>data</b>.
+
+```{r cylSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+cylSummaryExample <- data_summary(x = "cyl", data = mpg)
+```
+
+### Show method to output table and plot
+
+```{r cylSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(cylSummaryExample)
+```
+
+### Output the summary table
+
+```{r cylSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(cylSummaryExample)
+```
+
+### Output the plot
+
+```{r cylSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(cylSummaryExample)
+```
+
+### Generate knitr friendly summary table
+
+```{r cylSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+make_kable_output(cylSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r cylSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$cyl), ".", sep = "")}
+make_complete_output(cylSummaryExample)
+```
+
+## Categorical By {.tabset .tabset-fade .tabset-pills}
+
+For a categorical variable with by, we need to specify <b>x</b>, a <b>by</b> variable, and the <b>data</b>.
+
+```{r cylByYearSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+cylByYearSummaryExample <- data_summary(x = "cyl", by = "year", data = mpg)
+```
+
+### Show method to output table and plot
+
+```{r cylByYearSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(cylByYearSummaryExample)
+```
+
+### Output the summary table
+
+```{r cylByYearSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(cylByYearSummaryExample)
+```
+
+### Output the plot
+
+```{r cylByYearSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(cylByYearSummaryExample)
+```
+
+### Generate a knitr friendly summary table
+
+```{r cylByYearSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+make_kable_output(cylByYearSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r cylByYearSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$cyl), " by ", label(mpg$year), ".", sep = "")}
+make_complete_output(cylByYearSummaryExample)
+```
+
+## Categorical By By {.tabset .tabset-fade .tabset-pills}
+
+For a categorical variable with two or more by variables, we need to specify <b>x</b>, the <b>by</b> variables as a character string, and the <b>data</b>.
+
+```{r cylByYearByPartySummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+cylByYearByPartySummaryExample <- data_summary(x = "cyl", by = c("year", "party"), data = mpg)
+```
+
+### Show method to output table and plot
+
+```{r cylByYearByPartySummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(cylByYearByPartySummaryExample)
+```
+
+### Output the summary table
+
+```{r cylByYearByPartySummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(cylByYearByPartySummaryExample)
+```
+
+### Output the plot
+
+```{r cylByYearByPartySummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(cylByYearByPartySummaryExample)
+```
+
+### Generate a knitr friendly summary table
+
+```{r cylByYearByPartySummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+make_kable_output(cylByYearByPartySummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r cylByYearByPartySummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$cyl), " by ", label(mpg$year), " by ", label(mpg$party), ".", sep = "")}
+make_complete_output(cylByYearByPartySummaryExample)
+```
+
+## Continuous {.tabset .tabset-fade .tabset-pills}
+
+For a continuous variable <b>x</b>, we only need to specify <b>x</b> and the <b>data</b>.
+
+```{r ctySummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+ctySummaryExample <- data_summary(x = "cty", data = mpg)
+```
+
+### Show method to output table and plot
+
+```{r ctySummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(ctySummaryExample)
+```
+
+### Output the summary table
+
+```{r ctySummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(ctySummaryExample)
+```
+
+### Output the plot
+
+```{r ctySummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(ctySummaryExample)
+```
+
+### Generate knitr friendly summary table
+
+```{r ctySummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+make_kable_output(ctySummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r ctySummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$cty), ".", sep = "")}
+make_complete_output(ctySummaryExample)
+```
+
+## Continuous By {.tabset .tabset-fade .tabset-pills}
+
+For a continuous variable with by, we need to specify <b>x</b>, a <b>by</b> variable, and the <b>data</b>.
+
+```{r ctyByCylSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+ctyByCylSummaryExample <- data_summary(x = "cty", by = "cyl", data = mpg)
+```
+
+### Show method to output table and plot
+
+```{r ctyByCylSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(ctyByCylSummaryExample)
+```
+
+### Output the summary table
+
+```{r ctyByCylSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(ctyByCylSummaryExample)
+```
+
+### Output the plot
+
+```{r ctyByCylSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(ctyByCylSummaryExample)
+```
+
+### Generate a knitr friendly summary table
+
+```{r ctyByCylSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+make_kable_output(ctyByCylSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r ctyByCylSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$cty), " by ", label(mpg$cyl), ".", sep = "")}
+make_complete_output(ctyByCylSummaryExample)
+```
+
+## Continuous By By {.tabset .tabset-fade .tabset-pills}
+
+For a continuous variable with two or more by variables, we need to specify <b>x</b>, the <b>by</b> variables as a character string, and the <b>data</b>.
+
+```{r ctyByCylByYearSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+ctyByCylByYearSummaryExample <- data_summary(x = "cty", by = c("cyl", "year"), data = mpg)
+```
+
+### Show method to output table and plot
+
+```{r ctyByCylByYearSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(ctyByCylByYearSummaryExample)
+```
+
+### Output the summary table
+
+```{r ctyByCylByYearSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(ctyByCylByYearSummaryExample)
+```
+
+### Output the plot
+
+```{r ctyByCylByYearSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(ctyByCylByYearSummaryExample)
+```
+
+### Generate a knitr friendly summary table
+
+```{r ctyByCylByYearSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+make_kable_output(ctyByCylByYearSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r ctyByCylByYearSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$cty), " by ", label(mpg$cyl), " by ", label(mpg$year), ".", sep = "")}
+make_complete_output(ctyByCylByYearSummaryExample)
+```
+
+## Date {.tabset .tabset-fade .tabset-pills}
+
+For a date variable <b>x</b>, we  need to specify <b>x</b>, the <b>data</b>, and <b>difftime_units</b>.
+
+```{r dpSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+dpSummaryExample <- data_summary(x = "dp", data = mpg[which(mpg$dp != "1000-05-02" | is.na(mpg$dp)), ], difftime_units = "weeks")
+```
+
+### Show method to output table and plot
+
+```{r dpSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(dpSummaryExample)
+```
+
+### Output the summary table
+
+```{r dpSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(dpSummaryExample)
+```
+
+### Output the plot
+
+```{r dpSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(dpSummaryExample)
+```
+
+### Generate knitr friendly summary table
+
+```{r dpSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+make_kable_output(dpSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r dpSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$dp), ".", sep = "")}
+make_complete_output(dpSummaryExample)
+```
+
+## Date By {.tabset .tabset-fade .tabset-pills}
+
+For a date variable with by, we need to specify <b>x</b>, a <b>by</b> variable, the <b>data</b>, and <b>difftime_units</b>.
+
+```{r dpByCylSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+dpByCylSummaryExample <- data_summary(x = "dp", by = "cyl", data = mpg[which(mpg$dp != "1000-05-02" | is.na(mpg$dp)), ], difftime_units = "weeks")
+```
+
+### Show method to output table and plot
+
+```{r dpByCylSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(dpByCylSummaryExample)
+```
+
+### Output the summary table
+
+```{r dpByCylSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(dpByCylSummaryExample)
+```
+
+### Output the plot
+
+```{r dpByCylSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(dpByCylSummaryExample)
+```
+
+### Generate a knitr friendly summary table
+
+```{r dpByCylSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+make_kable_output(dpByCylSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r dpByCylSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$dp), " by ", label(mpg$cyl), ".", sep = "")}
+make_complete_output(dpByCylSummaryExample)
+```
+
+## Date By By {.tabset .tabset-fade .tabset-pills}
+
+For a date variable with two or more by variables, we need to specify <b>x</b>, the <b>by</b> variables as a character string, the <b>data</b>, and <b>difftime_units</b>.
+
+```{r dpByCylByCommentsSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+dpByCylByCommentsSummaryExample <- data_summary(x = "dp", by = c("cyl", "comments"), data = mpg[which(mpg$dp != "1000-05-02" | is.na(mpg$dp)), ], difftime_units = "weeks")
+```
+
+### Show method to output table and plot
+
+```{r dpByCylByCommentsSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(dpByCylByCommentsSummaryExample)
+```
+
+### Output the summary table
+
+```{r dpByCylByCommentsSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(dpByCylByCommentsSummaryExample)
+```
+
+### Output the plot
+
+```{r dpByCylByCommentsSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 8, fig.asp = 0.8}
+data_summary_plot(dpByCylByCommentsSummaryExample)
+```
+
+### Generate a knitr friendly summary table
+
+```{r dpByCylByCommentsSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+make_kable_output(dpByCylByCommentsSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r dpByCylByCommentsSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 8, fig.asp = 0.8, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$dp), " by ", label(mpg$cyl), " by ", label(mpg$comments), ".", sep = "")}
+make_complete_output(dpByCylByCommentsSummaryExample)
+```
+
+## Difftime {.tabset .tabset-fade .tabset-pills}
+
+For a difftime variable <b>x</b>, we  need to specify <b>x</b>, the <b>data</b>, and <b>difftime_units</b>.
+
+```{r rdifftimeSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+rdifftimeSummaryExample <- data_summary(x = "rdifftime", data = mpg, difftime_units = "weeks")
+```
+
+### Show method to output table and plot
+
+```{r rdifftimeSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(rdifftimeSummaryExample)
+```
+
+### Output the summary table
+
+```{r rdifftimeSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(rdifftimeSummaryExample)
+```
+
+### Output the plot
+
+```{r rdifftimeSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(rdifftimeSummaryExample)
+```
+
+### Generate knitr friendly summary table
+
+```{r rdifftimeSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+make_kable_output(rdifftimeSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r rdifftimeSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$rdifftime), ".", sep = "")}
+make_complete_output(rdifftimeSummaryExample)
+```
+
+## Difftime By {.tabset .tabset-fade .tabset-pills}
+
+For a date variable with by, we need to specify <b>x</b>, a <b>by</b> variable, the <b>data</b>, and <b>difftime_units</b>.
+
+```{r rdifftimeByDrvSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+rdifftimeByDrvSummaryExample <- data_summary(x = "rdifftime", by = "drv", data = mpg, difftime_units = "weeks")
+```
+
+### Show method to output table and plot
+
+```{r rdifftimeByDrvSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(rdifftimeByDrvSummaryExample)
+```
+
+### Output the summary table
+
+```{r rdifftimeByDrvSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(rdifftimeByDrvSummaryExample)
+```
+
+### Output the plot
+
+```{r rdifftimeByDrvSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(rdifftimeByDrvSummaryExample)
+```
+
+### Generate a knitr friendly summary table
+
+```{r rdifftimeByDrvSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+make_kable_output(rdifftimeByDrvSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r rdifftimeByDrvSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$rdifftime), " by ", label(mpg$drv), ".", sep = "")}
+make_complete_output(rdifftimeByDrvSummaryExample)
+```
+
+## Difftime By By {.tabset .tabset-fade .tabset-pills}
+
+For a date variable with two or more by variables, we need to specify <b>x</b>, the <b>by</b> variables as a character string, the <b>data</b>, and <b>difftime_units</b>.
+
+```{r rdifftimeByDrvBypartySummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+rdifftimeByDrvBypartySummaryExample <- data_summary(x = "rdifftime", by = c("drv", "party"), data = mpg, difftime_units = "weeks")
+```
+
+### Show method to output table and plot
+
+```{r rdifftimeByDrvBypartySummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(rdifftimeByDrvBypartySummaryExample)
+```
+
+### Output the summary table
+
+```{r rdifftimeByDrvBypartySummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(rdifftimeByDrvBypartySummaryExample)
+```
+
+### Output the plot
+
+```{r rdifftimeByDrvBypartySummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 8, fig.asp = 0.8}
+data_summary_plot(rdifftimeByDrvBypartySummaryExample)
+```
+
+### Generate a knitr friendly summary table
+
+```{r rdifftimeByDrvBypartySummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+make_kable_output(rdifftimeByDrvBypartySummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r rdifftimeByDrvBypartySummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 8, fig.asp = 0.8, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$rdifftime), " by ", label(mpg$drv), " by ", label(mpg$party), ".", sep = "")}
+make_complete_output(rdifftimeByDrvBypartySummaryExample)
+```
+
+# Data Summaries {.tabset .tabset-fade .tabset-pills}
+
+## Manufacturer
+
+The results are in table \@ref(tab:manuSummary) and figure \@ref(fig:manuSummary).
+
+```{r manuSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>", label(mpg$manu), "</b>.", sep = "")}
+manuSummary <- data_summary(x = "manu", data = mpg)
+
+make_complete_output(manuSummary)
+```
+
+## Model Name
+
+The results are in table \@ref(tab:modelSummary) and figure \@ref(fig:modelSummary).
+
+```{r modelSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>", label(mpg$model), "</b>.", sep = "")}
+modelSummary <- data_summary(x = "model", data = mpg)
+
+make_complete_output(modelSummary)
+```
+
+## Engine Displacement (Litres)
+
+The results are in table \@ref(tab:displSummary) and figure \@ref(fig:displSummary).
+
+```{r displSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$displ), "</b>.", sep = "")}
+displSummary <- data_summary(x = "displ", data = mpg)
+
+make_complete_output(displSummary)
+```
+
+## Year of Manufacture
+
+The results are in table \@ref(tab:yearSummary) and figure \@ref(fig:yearSummary).
+
+```{r yearSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>", label(mpg$year), "</b>.", sep = "")}
+yearSummary <- data_summary(x = "year", data = mpg)
+
+make_complete_output(yearSummary)
+```
+
+## Date of Purchase
+
+The results are in table \@ref(tab:dpSummary) and figure \@ref(fig:dpSummary).
+
+```{r dpSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$dp), "</b>.", sep = "")}
+dpSummary <- data_summary(x = "dp", data = mpg[which(mpg$dp != "1000-05-02" | is.na(mpg$dp)), ], difftime_units = "weeks")
+
+make_complete_output(dpSummary)
+```
+
+## Number of Cylinders
+
+The results are in table \@ref(tab:cylSummary) and figure \@ref(fig:cylSummary).
+
+```{r cylSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>", label(mpg$cyl), "</b>.", sep = "")}
+cylSummary <- data_summary(x = "cyl", data = mpg)
+
+make_complete_output(cylSummary)
+```
+
+## Type of Transmission
+
+The results are in table \@ref(tab:transSummary) and figure \@ref(fig:transSummary).
+
+```{r transSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>",  label(mpg$trans), "</b>.", sep = "")}
+transSummary <- data_summary(x = "trans", data = mpg)
+
+make_complete_output(transSummary)
+```
+
+## Drive Type
+
+The results are in table \@ref(tab:drvSummary) and figure \@ref(fig:drvSummary).
+
+```{r drvSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>",  label(mpg$drv), "</b>.", sep = "")}
+drvSummary <- data_summary(x = "drv", data = mpg)
+
+make_complete_output(drvSummary)
+```
+
+## City MPG
+
+The results are in table \@ref(tab:ctySummary) and figure \@ref(fig:ctySummary).
+
+```{r ctySummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>",  label(mpg$cty), "</b>.", sep = "")}
+ctySummary <- data_summary(x = "cty", data = mpg)
+
+make_complete_output(ctySummary)
+```
+
+## Highway MPG
+
+The results are in table \@ref(tab:hwySummary) and figure \@ref(fig:hwySummary).
+
+```{r hwySummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>",  label(mpg$hwy), "</b>.", sep = "")}
+hwySummary <- data_summary(x = "hwy", data = mpg)
+
+make_complete_output(hwySummary)
+```
+
+## Fuel Type
+
+The results are in table \@ref(tab:flSummary) and figure \@ref(fig:flSummary).
+
+```{r flSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>",  label(mpg$fl), "</b>.", sep = "")}
+flSummary <- data_summary(x = "fl", data = mpg)
+
+make_complete_output(flSummary)
+```
+
+## Type of Car
+
+The results are in table \@ref(tab:classSummary) and figure \@ref(fig:classSummary).
+
+```{r classSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>",  label(mpg$class), "</b>.", sep = "")}
+classSummary <- data_summary(x = "class", data = mpg)
+
+make_complete_output(classSummary)
+```
+
+## Random Numbers
+
+The results are in table \@ref(tab:rnSummary) and figure \@ref(fig:rnSummary).
+
+```{r rnSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>",  label(mpg$rn), "</b>.", sep = "")}
+rnSummary <- data_summary(x = "rn", data = mpg)
+
+make_complete_output(rnSummary)
+```
+
+## Random Difference in Time
+
+The results are in table \@ref(tab:rdifftimeSummary) and figure \@ref(fig:rdifftimeSummary).
+
+```{r rdifftimeSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>",  label(mpg$rdifftime), "</b>.", sep = "")}
+rdifftimeSummary <- data_summary(x = "rdifftime", difftime_units = "weeks", data = mpg)
+
+make_complete_output(rdifftimeSummary)
+```
+
+## Random Difference in Time Greater than 10
+
+The results are in table \@ref(tab:logicalSummary) and figure \@ref(fig:logicalSummary).
+
+```{r logicalSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>",  label(mpg$logical), "</b>.", sep = "")}
+logicalSummary <- data_summary(x = "logical", difftime_units = "weeks", data = mpg)
+
+make_complete_output(logicalSummary)
+```
+
+## Party
+
+The results are in table \@ref(tab:partySummary) and figure \@ref(fig:partySummary).
+
+```{r partySummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>",  label(mpg$party), "</b>.", sep = "")}
+partySummary <- data_summary(x = "party", data = mpg)
+
+make_complete_output(partySummary)
+```
+
+## Comments
+
+The results are in table \@ref(tab:commentsSummary) and figure \@ref(fig:commentsSummary).
+
+```{r commentsSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>", label(mpg$comments), "</b>.", sep = "")}
+commentsSummary <- data_summary(x = "comments", data = mpg)
+
+make_complete_output(commentsSummary)
+```
+
+## All Missing
+
+The results are in table \@ref(tab:missSummary) and figure \@ref(fig:missSummary).
+
+```{r missSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>", label(mpg$miss), "</b>.", sep = "")}
+missSummary <- data_summary(x = "miss", data = mpg)
+
+make_complete_output(missSummary)
+```
+
+# By Data Summaries
+
+## By Drive Type {.tabset .tabset-fade .tabset-pills}
+
+### Number of Cylinders by Drive Type
+
+The results are in table \@ref(tab:cylByDrvSummary) and figure \@ref(fig:cylByDrvSummary).
+
+```{r cylByDrvSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>", label(mpg$cyl), "</b> by <b>", label(mpg$drv), "</b>.", sep = "")}
+cylByDrvSummary <- data_summary(x = "cyl", by = "drv", data = mpg)
+
+make_complete_output(cylByDrvSummary)
+```
+
+### Date of Purchase by Drive Type
+
+The results are in table \@ref(tab:dpByDrvSummary) and figure \@ref(fig:dpByDrvSummary).
+
+```{r dpByDrvSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$dp), "</b> by <b>", label(mpg$drv), "</b>.", sep = "")}
+dpByDrvSummary <- data_summary(x = "dp", by = "drv", data = mpg[which(mpg$dp != "1000-05-02" | is.na(mpg$dp)), ], difftime_units = "weeks")
+
+make_complete_output(dpByDrvSummary)
+```
+
+### Random Numbers by Drive Type
+
+The results are in table \@ref(tab:rnByDrvSummary) and figure \@ref(fig:rnByDrvSummary).
+
+```{r rnByDrvSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$rn), "</b> by <b>", label(mpg$drv), "</b>.", sep = "")}
+rnByDrvSummary <- data_summary(x = "rn", by = "drv", data = mpg)
+
+make_complete_output(rnByDrvSummary)
+```
+
+### Random Difference in Time by Drive Type
+
+The results are in table \@ref(tab:rdifftimeByDrvSummary) and figure \@ref(fig:rdifftimeByDrvSummary).
+
+```{r rdifftimeByDrvSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$rdifftime), "</b> by <b>", label(mpg$drv), "</b>.", sep = "")}
+rdifftimeByDrvSummary <- data_summary(x = "rdifftime", by = "drv", difftime_units = "weeks", data = mpg)
+
+make_complete_output(rdifftimeByDrvSummary)
+```
+
+### Random Difference in Time Greater than 10 by Drive Type
+
+The results are in table \@ref(tab:logicalByDrvSummary) and figure \@ref(fig:logicalByDrvSummary).
+
+```{r logicalByDrvSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>", label(mpg$logical), "</b> by <b>", label(mpg$drv), "</b>.", sep = "")}
+logicalByDrvSummary <- data_summary(x = "logical", by = "drv", difftime_units = "weeks", data = mpg)
+
+make_complete_output(logicalByDrvSummary)
+```
+
+### Comments by Drive Type
+
+The results are in table \@ref(tab:commentsByDrvSummary) and figure \@ref(fig:commentsByDrvSummary).
+
+```{r commentsByDrvSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>", label(mpg$comments), "</b> by <b>", label(mpg$drv), "</b>.", sep = "")}
+commentsByDrvSummary <- data_summary(x = "comments", by = "drv", data = mpg)
+
+make_complete_output(commentsByDrvSummary)
+```
+
+### All Missing by Drive Type
+
+The results are in table \@ref(tab:missByDrvSummary) and figure \@ref(fig:missByDrvSummary).
+
+```{r missByDrvSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>", label(mpg$miss), "</b> by <b>", label(mpg$drv), "</b>.", sep = "")}
+missByDrvSummary <- data_summary(x = "miss", by = "drv", data = mpg)
+
+make_complete_output(missByDrvSummary)
+```
+
+## City and Highway MPG {.tabset .tabset-fade .tabset-pills}
+
+### City MPG by Manufacturer
+
+The results are in table \@ref(tab:ctyBymanuSummary) and figure \@ref(fig:ctyBymanuSummary).
+
+```{r ctyBymanuSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$cty), "</b> by <b>", label(mpg$manu), "</b>.", sep = "")}
+ctyBymanuSummary <- data_summary(x = "cty", by = "manu", data = mpg)
+
+make_complete_output(ctyBymanuSummary)
+```
+
+### Highway MPG by Manufacturer
+
+The results are in table \@ref(tab:hwyBymanuSummary) and figure \@ref(fig:hwyBymanuSummary).
+
+```{r hwyBymanuSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$hwy), "</b> by <b>", label(mpg$manu), "</b>.", sep = "")}
+hwyBymanuSummary <- data_summary(x = "hwy", by = "manu", data = mpg)
+
+make_complete_output(hwyBymanuSummary)
+```
+
+### City MPG by Model Name
+
+The results are in table \@ref(tab:ctyBymodelSummary) and figure \@ref(fig:ctyBymodelSummary).
+
+```{r ctyBymodelSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$cty), "</b> by <b>", label(mpg$model), "</b>.", sep = "")}
+ctyBymodelSummary <- data_summary(x = "cty", by = "model", data = mpg)
+
+make_complete_output(ctyBymodelSummary)
+```
+
+### Highway MPG by Model Name
+
+The results are in table \@ref(tab:hwyBymodelSummary) and figure \@ref(fig:hwyBymodelSummary).
+
+```{r hwyBymodelSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$hwy), "</b> by <b>", label(mpg$model), "</b>.", sep = "")}
+hwyBymodelSummary <- data_summary(x = "hwy", by = "model", data = mpg)
+
+make_complete_output(hwyBymodelSummary)
+```
+
+### City MPG by Year of Manufacture
+
+The results are in table \@ref(tab:ctyByYearSummary) and figure \@ref(fig:ctyByYearSummary).
+
+```{r ctyByYearSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$cty), "</b> by <b>", label(mpg$year), "</b>.", sep = "")}
+ctyByYearSummary <- data_summary(x = "cty", by = "year", data = mpg)
+
+make_complete_output(ctyByYearSummary)
+```
+
+### Highway MPG by Year of Manufacture
+
+The results are in table \@ref(tab:hwyByYearSummary) and figure \@ref(fig:hwyByYearSummary).
+
+```{r hwyByYearSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$hwy), "</b> by <b>", label(mpg$year), "</b>.", sep = "")}
+hwyByYearSummary <- data_summary(x = "hwy", by = "year", data = mpg)
+
+make_complete_output(hwyByYearSummary)
+```
+
+### City MPG by Number of Cylinders
+
+The results are in table \@ref(tab:ctyByCylSummary) and figure \@ref(fig:ctyByCylSummary).
+
+```{r ctyByCylSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$cty), "</b> by <b>", label(mpg$cyl), "</b>.", sep = "")}
+ctyByCylSummary <- data_summary(x = "cty", by = "cyl", data = mpg)
+
+make_complete_output(ctyByCylSummary)
+```
+
+### Highway MPG by Number of Cylinders
+
+The results are in table \@ref(tab:hwyByCylSummary) and figure \@ref(fig:hwyByCylSummary).
+
+```{r hwyByCylSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$hwy), "</b> by <b>", label(mpg$cyl), "</b>.", sep = "")}
+hwyByCylSummary <- data_summary(x = "hwy", by = "cyl", data = mpg)
+
+make_complete_output(hwyByCylSummary)
+```
+
+### City MPG by Type of Transmission
+
+The results are in table \@ref(tab:ctyBytransSummary) and figure \@ref(fig:ctyBytransSummary).
+
+```{r ctyBytransSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$cty), "</b> by <b>", label(mpg$trans), "</b>.", sep = "")}
+ctyBytransSummary <- data_summary(x = "cty", by = "trans", data = mpg)
+
+make_complete_output(ctyBytransSummary)
+```
+
+### Highway MPG by Type of Transmission
+
+The results are in table \@ref(tab:hwyBytransSummary) and figure \@ref(fig:hwyBytransSummary).
+
+```{r hwyBytransSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$hwy), "</b> by <b>", label(mpg$trans), "</b>.", sep = "")}
+hwyBytransSummary <- data_summary(x = "hwy", by = "trans", data = mpg)
+
+make_complete_output(hwyBytransSummary)
+```
+
+### City MPG by Drive Type
+
+The results are in table \@ref(tab:ctyByDrvSummary) and figure \@ref(fig:ctyByDrvSummary).
+
+```{r ctyByDrvSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$cty), "</b> by <b>", label(mpg$drv), "</b>.", sep = "")}
+ctyByDrvSummary <- data_summary(x = "cty", by = "drv", data = mpg)
+
+make_complete_output(ctyByDrvSummary)
+```
+
+### Highway MPG by Drive Type
+
+The results are in table \@ref(tab:hwyByDrvSummary) and figure \@ref(fig:hwyByDrvSummary).
+
+```{r hwyByDrvSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$hwy), "</b> by <b>", label(mpg$drv), "</b>.", sep = "")}
+hwyByDrvSummary <- data_summary(x = "hwy", by = "drv", data = mpg)
+
+make_complete_output(hwyByDrvSummary)
+```
+
+### City MPG by Fuel Type
+
+The results are in table \@ref(tab:ctyByflSummary) and figure \@ref(fig:ctyByflSummary).
+
+```{r ctyByflSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$cty), "</b> by <b>", label(mpg$fl), "</b>.", sep = "")}
+ctyByflSummary <- data_summary(x = "cty", by = "fl", data = mpg)
+
+make_complete_output(ctyByflSummary)
+```
+
+### Highway MPG by Fuel Type
+
+The results are in table \@ref(tab:hwyByflSummary) and figure \@ref(fig:hwyByflSummary).
+
+```{r hwyByflSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$hwy), "</b> by <b>", label(mpg$fl), "</b>.", sep = "")}
+hwyByflSummary <- data_summary(x = "hwy", by = "fl", data = mpg)
+
+make_complete_output(hwyByflSummary)
+```
+
+### City MPG by Type of Car
+
+The results are in table \@ref(tab:ctyByclassSummary) and figure \@ref(fig:ctyByclassSummary).
+
+```{r ctyByclassSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$cty), "</b> by <b>", label(mpg$class), "</b>.", sep = "")}
+ctyByclassSummary <- data_summary(x = "cty", by = "class", data = mpg)
+
+make_complete_output(ctyByclassSummary)
+```
+
+### Highway MPG by Type of Car
+
+The results are in table \@ref(tab:hwyByclassSummary) and figure \@ref(fig:hwyByclassSummary).
+
+```{r hwyByclassSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$hwy), "</b> by <b>", label(mpg$class), "</b>.", sep = "")}
+hwyByclassSummary <- data_summary(x = "hwy", by = "class", data = mpg)
+
+make_complete_output(hwyByclassSummary)
+```
+
+### City MPG by Comments
+
+The results are in table \@ref(tab:ctyByCommentsSummary) and figure \@ref(fig:ctyByCommentsSummary).
+
+```{r ctyByCommentsSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$cty), "</b> by <b>", label(mpg$comments), "</b>.", sep = "")}
+ctyByCommentsSummary <- data_summary(x = "cty", by = "comments", data = mpg)
+
+make_complete_output(ctyByCommentsSummary)
+```
+
+### Highway MPG by Comments
+
+The results are in table \@ref(tab:hwyByCommentsSummary) and figure \@ref(fig:hwyByCommentsSummary).
+
+```{r hwyByCommentsSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$hwy), "</b> by <b>", label(mpg$comments), "</b>.", sep = "")}
+hwyByCommentsSummary <- data_summary(x = "hwy", by = "comments", data = mpg)
+
+make_complete_output(hwyByCommentsSummary)
+```
+
+### City MPG by Party
+
+The results are in table \@ref(tab:ctyByPartySummary) and figure \@ref(fig:ctyByPartySummary).
+
+```{r ctyByPartySummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$cty), "</b> by <b>", label(mpg$Party), "</b>.", sep = "")}
+ctyByPartySummary <- data_summary(x = "cty", by = "party", data = mpg)
+
+make_complete_output(ctyByPartySummary)
+```
+
+### Highway MPG by Party
+
+The results are in table \@ref(tab:hwyByPartySummary) and figure \@ref(fig:hwyByPartySummary).
+
+```{r hwyByPartySummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$hwy), "</b> by <b>", label(mpg$Party), "</b>.", sep = "")}
+hwyByPartySummary <- data_summary(x = "hwy", by = "party", data = mpg)
+
+make_complete_output(hwyByPartySummary)
+```
+
+### City MPG by All Missing
+
+The results are in table \@ref(tab:ctyByMissSummary) and figure \@ref(fig:ctyByMissSummary).
+
+```{r ctyByMissSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$cty), "</b> by <b>", label(mpg$miss), "</b>.", sep = "")}
+ctyByMissSummary <- data_summary(x = "cty", by = "miss", data = mpg)
+
+make_complete_output(ctyByMissSummary)
+```
+
+### Highway MPG by All Missing
+
+The results are in table \@ref(tab:hwyByMissSummary) and figure \@ref(fig:hwyByMissSummary).
+
+```{r hwyByMissSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$hwy), "</b> by <b>", label(mpg$miss), "</b>.", sep = "")}
+hwyByMissSummary <- data_summary(x = "hwy", by = "miss", data = mpg)
+
+make_complete_output(hwyByMissSummary)
+```
+
+## Other Examples {.tabset .tabset-fade .tabset-pills}
+
+### Date of Purchase by Year of Manufacture
+
+The results are in table \@ref(tab:dpByYearSummary) and figure \@ref(fig:dpByYearSummary).
+
+```{r dpByYearSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$dp), "</b> by <b>", label(mpg$year), "</b>.", sep = "")}
+dpByYearSummary <- data_summary(x = "dp", by = "year", data = mpg[which(mpg$dp != "1000-05-02" | is.na(mpg$dp)), ], difftime_units = "weeks")
+
+make_complete_output(dpByYearSummary)
+```
+
+### Date of Purchase by Comments
+
+The results are in table \@ref(tab:dpByCommentsSummary) and figure \@ref(fig:dpByCommentsSummary).
+
+```{r dpByCommentsSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$dp), "</b> by <b>", label(mpg$comments), "</b>.", sep = "")}
+dpByCommentsSummary <- data_summary(x = "dp", by = "comments", data = mpg[which(mpg$dp != "1000-05-02" | is.na(mpg$dp)), ], difftime_units = "weeks")
+
+make_complete_output(dpByCommentsSummary)
+```
+
+### Random Number by Party
+
+The results are in table \@ref(tab:rnByPartySummary) and figure \@ref(fig:rnByPartySummary).
+
+```{r rnByPartySummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$rn), "</b> by <b>", label(mpg$party), "</b>.", sep = "")}
+rnByPartySummary <- data_summary(x = "rn", by = "party", data = mpg)
+
+make_complete_output(rnByPartySummary)
+```
+
+### Random Difference in Time by Party
+
+The results are in table \@ref(tab:rdifftimeByPartySummary) and figure \@ref(fig:rdifftimeByPartySummary).
+
+```{r rdifftimeByPartySummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$rdifftime), "</b> by <b>", label(mpg$party), "</b>.", sep = "")}
+rdifftimeByPartySummary <- data_summary(x = "rdifftime", by = "party", difftime_units = "weeks", data = mpg)
+
+make_complete_output(rdifftimeByPartySummary)
+```
+
+### Random Difference in Time by Comments
+
+The results are in table \@ref(tab:rdifftimeByCommentsSummary) and figure \@ref(fig:rdifftimeByCommentsSummary).
+
+```{r rdifftimeByCommentsSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$rdifftime), "</b> by <b>", label(mpg$comments), "</b>.", sep = "")}
+rdifftimeByCommentsSummary <- data_summary(x = "rdifftime", by = "comments", difftime_units = "weeks", data = mpg)
+
+make_complete_output(rdifftimeByCommentsSummary)
+```
+
+### Comments by Party
+
+The results are in table \@ref(tab:commentsByPartySummary) and figure \@ref(fig:commentsByPartySummary).
+
+```{r commentsByPartySummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Barplot of <b>", label(mpg$comments), "</b> by <b>", label(mpg$party), "</b>.", sep = "")}
+commentsByPartySummary <- data_summary(x = "comments", by = "party", data = mpg)
+
+make_complete_output(commentsByPartySummary)
+```
+
+# By By Data Summaries {.tabset .tabset-fade .tabset-pills}
+
+## City MPG by Number of Cylinders by Class
+
+The results are in table \@ref(tab:ctyByCylSummary) and figure \@ref(fig:ctyByCylSummary).
+
+```{r ctyByCylByClassSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$cty), "</b> by <b>", label(mpg$cyl), "</b> by <b>", label(mpg$class), "</b>.", sep = "")}
+ctyByCylByClassSummary <- data_summary(x = "cty", by = c("cyl", "class"), data = mpg)
+
+make_complete_output(ctyByCylByClassSummary)
+```
+
+## Highway MPG by Number of Cylinders by Class
+
+The results are in table \@ref(tab:hwyByCylSummary) and figure \@ref(fig:hwyByCylSummary).
+
+```{r hwyByCylByClassSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$hwy), "</b> by <b>", label(mpg$cyl), "</b> by <b>", label(mpg$class), "</b>.", sep = "")}
+hwyByCylByClassSummary <- data_summary(x = "hwy", by = c("cyl", "class"), data = mpg)
+
+make_complete_output(hwyByCylByClassSummary)
+```
+
+## Date of Purchase of Cylinders by Comments
+
+The results are in table \@ref(tab:dpByCylByCommentsSummary) and figure \@ref(fig:dpByCylByCommentsSummary).
+
+```{r dpByCylByCommentsSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Boxplot of <b>", label(mpg$dp), "</b> by <b>", label(mpg$cyl), "</b> by <b>", label(mpg$class), "</b>.", sep = "")}
+dpByCylByCommentsSummary <- data_summary(x = "dp", by = c("cyl", "comments"), difftime_units = "weeks", data = mpg[which(mpg$dp != "1000-05-02" | is.na(mpg$dp)), ])
+
+make_complete_output(dpByCylByCommentsSummary)
+```
+
+## Comments by Number of Cylinders by Class
+
+The results are in table \@ref(tab:commentsByCylByClassSummary) and figure \@ref(fig:commentsByCylByClassSummary).
+
+```{r commentsByCylByClassSummary, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of <b>", label(mpg$comments), "</b> by <b>", label(mpg$cyl), "</b> by <b>", label(mpg$class), "</b>.", sep = "")}
+commentsByCylByClassSummary <- data_summary(x = "comments", by = c("cyl", "class"), data = mpg)
+
+make_complete_output(commentsByCylByClassSummary)
+```
+
+# Summary Tables {.tabset .tabset-fade .tabset-pills}
+
+The full summaries with plots are useful for understanding the data and diagnosing issues, but eventually, you will want to summarise the data in a more digestible form.
+
+## Univariate Data Summaries
+
+```{r UnivariateDataSummaryTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+invisible(setGeneric(name = "univariate_data_summary", def = function(object) standardGeneric("univariate_data_summary")))
+setMethod(f = "univariate_data_summary",
+          signature = "dataSummaries", 
+          definition = function(object) 
+          {
+            if(all(c("Mean", "S Dev") %in% colnames(object@table))) {
+              xlab <- paste("<b>", object@xLab, ", Mean (SD)</b>", sep = "")
+              
+              if(length(object@difftime_units) > 0) {
+                res <- paste(object@table[, "Mean"], " (", object@table[, "S Dev"], " ", object@difftime_units, ")", sep = "")
+              } else {
+                res <- paste(object@table[, "Mean"], " (", object@table[, "S Dev"], ")", sep = "")
+              }
+              
+              res <- data.frame(res)
+              res$rname <- xlab
+              res <- res[, c(2, 1)]
+              colnames(res) <- c("", "")
+              rownames(res) <- NULL
+            } else {
+              xlab <- paste("<b>", object@xLab, ", n (%)", "</b>", sep = "")
+              res <- c("", object@table[, -1])
+              res <- data.frame(res, stringsAsFactors = FALSE)
+              res$rnames <- c(xlab, paste("&nbsp;&nbsp;", as.character(object@table[, 1]), sep = ""))
+              res <- res[, c(2, 1)]
+              colnames(res) <- c("", "")
+              rownames(res) <- NULL
+            }
+            
+            return(res)
+          }
+)
+
+univariateDataSummaryList <- list(
+  manuSummary, 
+  modelSummary, 
+  displSummary, 
+  yearSummary, 
+  dpSummary, 
+  cylSummary, 
+  transSummary, 
+  drvSummary, 
+  ctySummary, 
+  hwySummary, 
+  flSummary, 
+  classSummary, 
+  rnSummary, 
+  rdifftimeSummary,
+  logicalSummary,
+  partySummary, 
+  commentsSummary,
+  missSummary
+  )
+
+cars_univariate_data_summary <- do.call("rbind", lapply(univariateDataSummaryList, univariate_data_summary))
+
+kable(cars_univariate_data_summary, caption = "Data summaries", booktabs = TRUE, escape = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+
+## By Data Summaries
+
+```{r ByDataSummaryTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+invisible(setGeneric(name = "by_data_summary", def = function(object) standardGeneric("by_data_summary")))
+setMethod(f = "by_data_summary",
+          signature = "dataSummaries", 
+          definition = function(object) 
+          {
+              if(all(c("Mean", "S Dev") %in% colnames(object@table))) {
+              res <- t(object@table[, c("Mean", "S Dev")])
+              
+              if(length(object@difftime_units) > 0) {
+                res <- paste(object@table[, "Mean"], " (", object@table[, "S Dev"], " ", object@difftime_units, ")", sep = "")
+              } else {
+                res <- paste(object@table[, "Mean"], " (", object@table[, "S Dev"], ")", sep = "")
+              }
+              
+              res <- data.frame(t(res))
+              res$label <- paste("<b>", object@xLab, ", Mean (SD)</b>", sep = "")
+              rownames(res) <- NULL
+              res <- res[, c(which(colnames(res) == "label"), which(!(1:dim(res)[2] %in% which(colnames(res) == "label"))))]
+              colnames(res) <- c("", as.character(object@table[, 1]))
+            } else {
+              res <- object@table
+              res[, 1] <- paste("&nbsp;&nbsp;", res[, 1], sep = "")
+              res <- rbind("", res)
+              res[1,1] <- paste("<b>", object@xLab, ", N (%)</b>", sep = "")
+              colnames(res)[1] <- ""
+            }
+            
+            return(res)
+          }
+)
+
+byDataSummaryList <- list(
+  ctyByDrvSummary,
+  hwyByDrvSummary,
+  cylByDrvSummary,
+  dpByDrvSummary,
+  rnByDrvSummary,
+  rdifftimeByDrvSummary,
+  logicalByDrvSummary,
+  commentsByDrvSummary,
+  missByDrvSummary
+)
+
+cars_by_data_summary <- do.call("rbind", lapply(byDataSummaryList, by_data_summary))
+
+kable(cars_by_data_summary, caption = "Data summaries", booktabs = TRUE, escape = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+
+## Bivariate Data Summaries
+
+```{r BivariateDataSummaryTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+invisible(setGeneric(name = "bivariate_data_summary", def = function(object1, object2) standardGeneric("bivariate_data_summary")))
+setMethod(f = "bivariate_data_summary",
+          signature = "dataSummaries", 
+          definition = function(object1, object2) 
+          {
+            rnames <- c(paste("<b>", object1@byLab, "</b>", sep = ""), paste("&nbsp;&nbsp;", object1@table[, 1], sep = ""))
+            
+            if(length(object1@difftime_units) > 0) {
+              object1Res <- data.frame(c("", paste(object1@table[, "Mean"], " (", object1@table[, "S Dev"], " ", object1@difftime_units, ")", sep = "")), stringsAsFactors = FALSE)
+            } else {
+              object1Res <- data.frame(c("", paste(object1@table[, "Mean"], " (", object1@table[, "S Dev"], ")", sep = "")), stringsAsFactors = FALSE)
+            }       
+            
+            if(length(object2@difftime_units) > 0) {
+              object2Res <- data.frame(c("", paste(object2@table[, "Mean"], " (", object1@table[, "S Dev"], " ", object2@difftime_units, ")", sep = "")), stringsAsFactors = FALSE)
+            } else {
+              object2Res <- data.frame(c("", paste(object2@table[, "Mean"], " (", object2@table[, "S Dev"], ")", sep = "")), stringsAsFactors = FALSE)
+            }           
+            
+            res <- cbind(object1Res, object2Res)
+            res <- cbind(rnames, res)
+            
+            colnames(res) <- c("", paste(object1@xLab, ", Mean (SD)", sep = ""), paste(object2@xLab, ", Mean (SD)", sep = ""))
+            
+            return(res)
+          }
+)
+
+cars_bivariate_data_summary <- rbind(
+  bivariate_data_summary(ctyBymanuSummary, hwyBymanuSummary),
+  bivariate_data_summary(ctyBymodelSummary, hwyBymodelSummary),
+  bivariate_data_summary(ctyByYearSummary, hwyByYearSummary),
+  bivariate_data_summary(ctyByCylSummary, hwyByCylSummary),
+  bivariate_data_summary(ctyBytransSummary, hwyBytransSummary),
+  bivariate_data_summary(ctyByDrvSummary, hwyByDrvSummary),
+  bivariate_data_summary(ctyByflSummary, hwyByflSummary),
+  bivariate_data_summary(ctyByclassSummary, hwyByclassSummary),
+  bivariate_data_summary(ctyByPartySummary, hwyByPartySummary),
+  bivariate_data_summary(ctyByCommentsSummary, hwyByCommentsSummary),
+  bivariate_data_summary(ctyByMissSummary, hwyByMissSummary)
+)
+
+kable(cars_bivariate_data_summary, caption = "By data summaries of miles per gallons for city and highway.", booktabs = TRUE, escape = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+cars_bivariate_time_data_summary <- rbind(
+  bivariate_data_summary(ctyByPartySummary, rdifftimeByPartySummary),
+  bivariate_data_summary(ctyByCommentsSummary, rdifftimeByCommentsSummary)
+)
+
+kable(cars_bivariate_time_data_summary, caption = "By data summaries of miles per gallons for city and random difference in time.", booktabs = TRUE, escape = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+
+# Session Info
+
+```{r sessionInfo, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+sessionInfo()
+```
+
+<!-- # Testing -->
+
+<!-- The example data is based on venerable cars data set, however because we generally like to know the answer ahead of time when testing methods, we will setup the data generating process. -->
+
+<!-- > This dataset contains a subset of the fuel economy data that the EPA makes available <a href="http://fueleconomy.gov" target="_blank">here</a>. It contains only models which had a new release every year between 1999 and 2008 - this was used as a proxy for the popularity of the car. -->
+
+<!-- The example data is based on venerable cars data set, however because we generally like to know the answer ahead of time when testing methods, we will setup the data generating process based on these data.  Also because we want to make sure the code works for a variety of use cases, we will add in a few variables with different classes. -->
+
+<!-- Let's assume that the conditional distribution of both city and highway MPG $y_i$ for the $i^{th}$ observation is normal with mean equal to the linear predictor, $\eta$, and constant error variance $\sigma_{\epsilon}^2$.  Let $I$ be the indicator function that codes a variable at 0 or 1 (e.g., dummy factor coding). -->
+
+<!-- $$ -->
+<!-- \eta = \beta_{0} + \beta_1I(cyl = 5) + \beta_2I(cyl = 6) + \beta_3I(cyl = 8) -->
+<!-- $$ -->
+
+<!-- $$ -->
+<!-- y_i \sim N(\eta, \sigma_{\epsilon}^2) -->
+<!-- $$ -->
+
+<!-- ```{r cars, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE} -->
+<!-- head(mpg) -->
+<!-- ``` -->
+
+# References
+
+<!-- This is needed to resize iframe content. Please ignore if duplicationg this R markdown file --> 
+<script type="text/javascript" src="https://www.waderstats.com/wp-includes/js/iframe-resizer/js/iframeResizer.contentWindow.min.js" defer></script>
