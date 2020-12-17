@@ -896,7 +896,7 @@ make_complete_output(ctyByCylByYearSummaryExample)
 
 ## Date {.tabset .tabset-fade .tabset-pills}
 
-For a date variable <b>x</b>, we  need to specify <b>x</b>, the <b>data</b>, and <b>difftime_units</b>.
+For a date variable <b>x</b>, we need to specify <b>x</b>, the <b>data</b>, and <b>difftime_units</b>.
 
 ```{r dpSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
 dpSummaryExample <- data_summary(x = "dp", data = mpg[which(mpg$dp != "1000-05-02" | is.na(mpg$dp)), ], difftime_units = "weeks")
