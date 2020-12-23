@@ -23,7 +23,7 @@ output:
 
 An essential part of any data analysis project is to understand the data at hand.  For this task, we will create a function that takes as input a variable from the data, a categorical variable to describe by, and returns summary tables and plots.
 
-This presentation will use the R programming language and assume the user is using Rstudio to compile their R markdown files into HTML [@Rlang2019; @Rstudio].  If you want to follow along with the R markdown, it can be downloaded <a href="https://waderstats.com/rstudio-files/data_summaries/data_summaries.Rmd" target="_blank">here</a>.  The associated bibliography file is <a href="https://waderstats.com/rstudio-files/data_summaries/data_summaries.bib" target="_blank">here</a>.
+This presentation uses the R programming language and assumes the end user is taking advantage of RStudio IDE to compile their R markdown files into HTML [@Rlang2019; @Rstudio].  All of the files needed to reproduce these results can be downloaded from the Git repository <code>git clone <span>https</span>://git.waderstats.com/data_summaries/</code>.
 
 # Required Libraries
 
