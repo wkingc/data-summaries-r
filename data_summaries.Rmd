@@ -15,7 +15,7 @@ output:
 <!-- To Do -->
 
 <!-- What if no label? -->
-<!-- Add in variable name -->
+<!-- Objects of class POSIXct and POSIXt -->
 <!-- Error on not having difftime units defined for date objects -->
 <!-- Don't know how to automatically pick scale for object of type labelled/integer. Defaulting to continuous. -->
 
@@ -64,7 +64,18 @@ mpg$dp[which(mpg$year == "2008")] <- sample(seq(as.Date('2008-01-01', format = "
 mpg$dp[sample(1:length(mpg$dp), size = 20)] <- NA
 mpg$dp[10] <- as.Date('1000-05-02', format = "%Y-%m-%d", origin = "1970-01-01")
 
+mpg$dplt <- as.POSIXlt(NA, origin = "1970-01-01 0:0:0")
+mpg$dplt[which(mpg$year == "1999")] <- sample(seq(as.POSIXlt('1999-01-01 0:0:0', format = "%Y-%m-%d %H:%M:%S", origin = "1970-01-01 0:0:0"), as.POSIXlt('1999-12-25 0:0:0', format = "%Y-%m-%d %H:%M:%S", origin = "1970-01-01 0:0:0"), by="min"), dim(mpg)[1]/2)
+mpg$dplt[which(mpg$year == "2008")] <- sample(seq(as.POSIXlt('2008-01-01 0:0:0', format = "%Y-%m-%d %H:%M:%S", origin = "1970-01-01 0:0:0"), as.POSIXlt('2008-12-25 0:0:0', format = "%Y-%m-%d %H:%M:%S", origin = "1970-01-01 0:0:0"), by="sec"), dim(mpg)[1]/2)
+mpg$dplt[sample(1:length(mpg$dplt), size = 20)] <- NA
+
+mpg$dpct <- as.POSIXct(NA, origin = "1970-01-01 0:0:0")
+mpg$dpct[which(mpg$year == "1999")] <- sample(seq(as.POSIXct('1999-01-01 0:0:0', format = "%Y-%m-%d %H:%M:%S", origin = "1970-01-01 0:0:0"), as.POSIXct('1999-12-25 0:0:0', format = "%Y-%m-%d %H:%M:%S", origin = "1970-01-01 0:0:0"), by="min"), dim(mpg)[1]/2)
+mpg$dpct[which(mpg$year == "2008")] <- sample(seq(as.POSIXct('2008-01-01 0:0:0', format = "%Y-%m-%d %H:%M:%S", origin = "1970-01-01 0:0:0"), as.POSIXct('2008-12-25 0:0:0', format = "%Y-%m-%d %H:%M:%S", origin = "1970-01-01 0:0:0"), by="sec"), dim(mpg)[1]/2)
+mpg$dpct[sample(1:length(mpg$dpct), size = 20)] <- NA
+
 mpg$cyl <- factor(mpg$cyl, levels = c(4, 5, 6, 8), ordered = TRUE)
+
 mpg$trans <- factor(mpg$trans)
 mpg$drv <- factor(mpg$drv, levels = c("f", "r", "4"), labels = c("front-wheel drive", "rear wheel drive", "4wd"))
 mpg$fl <- factor(mpg$fl)
@@ -90,7 +101,9 @@ label(mpg$manu) <- "manufacturer"
 label(mpg$model) <- "model name"
 label(mpg$displ) <- "engine displacement, in litres"
 label(mpg$year) <- "year of manufacture"
-label(mpg$dp) <- "date of purchase"
+label(mpg$dp) <- "date of purchase (Date class)"
+label(mpg$dplt) <- "date of purchase (POSIXlt class)"
+label(mpg$dpct) <- "date of purchase (POSIXct class)"
 label(mpg$cyl) <- "number of cylinders"
 label(mpg$trans) <- "type of transmission"
 label(mpg$drv) <- "drive type"
@@ -112,7 +125,7 @@ kable(head(mpg), caption = "Header of <b>mpg</b>.", booktabs = TRUE, escape = FA
 
 Below are a set of functions I wrote to using S4 (see <a href="https://www.cyclismo.org/tutorial/R/s4Classes.html" target="_blank">https://www.cyclismo.org/tutorial/R/s4Classes.html</a> for a gentle introduction to object oriented programming in R), culminating into a single function called <b>data_summary</b>.  The basic structure uses an object of class <i>dataSummaries</i> and then, based on the class of <b>x</b>, the <i>dataSummariesSetup</i> method applied to the <i>dataSummaries</i> class, returns an object of class <i>dataSummariesCharacter</i>, <i>dataSummariesNumeric</i>, <i>dataSummariesDate</i>, or <i>dataSummariesDifftime</i>.  Each of these four output classes inherits from the <i>dataSummaries</i> class; thus any method written for <i>dataSummaries</i> also applies to the four classes that inherit from it.
 
-As input the <b>data_summary</b> function takes a variable to summarize (<b>x</b>), an optional variable or variables (as a character string) to summarize by (<b>by</b>), the data (<b>data</b>), and the units to use for <i>difftime</i> if <b>x</b> refers to a <i>Date</i> or <i>difftime</i> object in the <b>data</b>.
+As input the <b>data_summary</b> function takes a variable to summarize (<b>x</b>), an optional variable or variables (as a character string) to summarize by (<b>by</b>), the data (<b>data</b>), and the units to use for <i>difftime</i> if <b>x</b> refers to a <i>Date</i>, <i>POSIXlt</i>, <i>POSIXct</i>, or <i>difftime</i> object in the <b>data</b>.
 
 As output, the function returns an object of class <i>dataSummaries</i>.  The function has a <i>show</i> method and a method called <i>make_output</i> that generates <i>knitr</i> friendly output.  The summary table and plot can also be accessed individually through their accessor functions, <i>data_summary_table</i>, and <i>data_summary_plot</i>, respectively.
 
@@ -242,7 +255,7 @@ setMethod(f = "dataSummariesSetup",
               return(dataSummariesCharacter(object, type = class(data$var)))
             } else if (any(c("numeric", "integer") %in% class(data$var))) {
               return(dataSummariesNumeric(object, type = class(data$var))) 
-            } else if ("Date" %in% class(data$var)) {
+            } else if (any(c("Date", "POSIXlt", "POSIXct", "POSIXt") %in% class(data$var))) {
               if (length(object@difftime_units) == 0) stop("You need to specify the units for the difference in time.  See help(difftime) for additional information.")
               return(dataSummariesDate(object, type = class(data$var))) 
             } else if ("difftime" %in% class(data$var)) {
@@ -414,23 +427,39 @@ setMethod(f = "data_summary_switch",
             percMiss <- function(x) round((length(which(is.na(x)))/length(x))*100, 2)
             
             sdDate <- function(x) {
-              res <- as.difftime(sd(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+              res <- difftime(x, mean(x, na.rm = TRUE), units = "secs")
+              res <- as.numeric(as.character(res))
+              res <- sd(res, na.rm = TRUE)
+              res <- as.difftime(res, units = "secs")
               units(res) <- difftime_units
+
               return(res)
             }
+            
+            sdDate(data$var)
             
             madDate <- function(x) {
-              res <- as.difftime(mad(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+              res <- difftime(x, mean(x, na.rm = TRUE), units = "secs")
+              res <- as.numeric(as.character(res))
+              res <- mad(res, na.rm = TRUE)
+              res <- as.difftime(res, units = "secs")
               units(res) <- difftime_units
+              
               return(res)
             }
             
-            q25Date <- function(x) as.Date(quantile(as.numeric(x), probs = 0.25, na.rm = TRUE, type = 1), origin = "1970-01-01")
+            dquantile <- function(x, probs){
+              sx <- sort(x)
+              pos <- round(probs*length(x))
+              return(sx[pos])
+            }
             
-            q75Date <- function(x) as.Date(quantile(as.numeric(x), probs = 0.75, na.rm = TRUE, type = 1), origin = "1970-01-01")
-            
+            q25Date <- function(x) dquantile(x, probs = 0.25)
+  
+            q75Date <- function(x) dquantile(x, probs = 0.75)
+
             IQRdate <- function(x) {
-              res <- as.difftime(IQR(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+              res <- difftime(dquantile(x, probs = 0.75), dquantile(x, probs = 0.25), units = "secs")
               units(res) <- difftime_units
               return(res)
             }
@@ -440,15 +469,15 @@ setMethod(f = "data_summary_switch",
               summarize(label = xLab,
                         n = length(na.omit(var)),
                         miss = percMiss(var),
-                        mean = round(mean(var, na.rm = TRUE), 2),
+                        mean = mean(var, na.rm = TRUE),
                         sd = round(sdDate(var), 2),
-                        median = round(median(var, na.rm = TRUE), 2),
+                        median = median(var, na.rm = TRUE),
                         mad = round(madDate(var), 2),
-                        q25 = round(q25Date(var), 2),
-                        q75 = round(q75Date(var), 2),
-                        IQR = round(IQRdate(var), 2),
-                        min = round(min(var, na.rm = TRUE), 2),
-                        max = round(max(var, na.rm = TRUE), 2)
+                        q25 = q25Date(var),
+                        q75 = q75Date(var),
+                        IQR = IQRdate(var),
+                        min = min(var, na.rm = TRUE),
+                        max = max(var, na.rm = TRUE)
               )
             
             res <- data.frame(res)
@@ -456,7 +485,9 @@ setMethod(f = "data_summary_switch",
             colnames(res) <- c(byLab, "Label", "N", "P NA", "Mean", "S Dev", "Med", "MAD", "25th P", "75th P", "IQR", "Min", "Max")
             
             pData <- na.omit(data.frame(data[, c("var", "by")]))
-            
+  
+            if("POSIXlt" %in% class(pData$var)) pData$var <- as.POSIXct(pData$var)
+
             p = ggplot(data = pData, aes(x = by, y = var)) +
               geom_boxplot(position = position_dodge(1), fill = "#2c7bb6") +
               xlab(byLab) +
@@ -470,9 +501,6 @@ setMethod(f = "data_summary_switch",
                     panel.grid = element_line(color = "lightgray"),
                     panel.background = element_rect(fill = "white", colour = "white"))
             
-            if(dim(pData)[1] != 0) p = p + scale_y_date(limits = c(min(pData$var),  max(pData$var)))
-            if(dim(pData)[1] == 0) p = p + scale_y_date(limits = NULL)
-
             object@table <- res
             object@plot <- p
             
@@ -1006,6 +1034,234 @@ make_kable_output(dpByCylByCommentsSummaryExample)
 
 ```{r dpByCylByCommentsSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 8, fig.asp = 0.8, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$dp), " by ", label(mpg$cyl), " by ", label(mpg$comments), ".", sep = "")}
 make_complete_output(dpByCylByCommentsSummaryExample)
+```
+
+## POSIXlt Date {.tabset .tabset-fade .tabset-pills}
+
+For a date variable <b>x</b>, we need to specify <b>x</b>, the <b>data</b>, and <b>difftime_units</b>.
+
+```{r dpltSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+dpltSummaryExample <- data_summary(x = "dplt", data = mpg, difftime_units = "weeks")
+```
+
+### Show method to output table and plot
+
+```{r dpltSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(dpltSummaryExample)
+```
+
+### Output the summary table
+
+```{r dpltSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(dpltSummaryExample)
+```
+
+### Output the plot
+
+```{r dpltSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(dpltSummaryExample)
+```
+
+### Generate knitr friendly summary table
+
+```{r dpltSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+make_kable_output(dpltSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r dpltSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$dp), ".", sep = "")}
+make_complete_output(dpltSummaryExample)
+```
+
+## POSIXlt Date By {.tabset .tabset-fade .tabset-pills}
+
+For a date variable with by, we need to specify <b>x</b>, a <b>by</b> variable, the <b>data</b>, and <b>difftime_units</b>.
+
+```{r dpltByCylSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+dpltByCylSummaryExample <- data_summary(x = "dplt", by = "cyl", data = mpg, difftime_units = "weeks")
+```
+
+### Show method to output table and plot
+
+```{r dpltByCylSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(dpltByCylSummaryExample)
+```
+
+### Output the summary table
+
+```{r dpltByCylSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(dpltByCylSummaryExample)
+```
+
+### Output the plot
+
+```{r dpltByCylSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(dpltByCylSummaryExample)
+```
+
+### Generate a knitr friendly summary table
+
+```{r dpltByCylSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+make_kable_output(dpltByCylSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r dpltByCylSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$dp), " by ", label(mpg$cyl), ".", sep = "")}
+make_complete_output(dpltByCylSummaryExample)
+```
+
+## POSIXlt Date By By {.tabset .tabset-fade .tabset-pills}
+
+For a date variable with two or more by variables, we need to specify <b>x</b>, the <b>by</b> variables as a character string, the <b>data</b>, and <b>difftime_units</b>.
+
+```{r dpltByCylByCommentsSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+dpltByCylByCommentsSummaryExample <- data_summary(x = "dplt", by = c("cyl", "comments"), data = mpg, difftime_units = "weeks")
+```
+
+### Show method to output table and plot
+
+```{r dpltByCylByCommentsSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(dpltByCylByCommentsSummaryExample)
+```
+
+### Output the summary table
+
+```{r dpltByCylByCommentsSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(dpltByCylByCommentsSummaryExample)
+```
+
+### Output the plot
+
+```{r dpltByCylByCommentsSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 8, fig.asp = 0.8}
+data_summary_plot(dpltByCylByCommentsSummaryExample)
+```
+
+### Generate a knitr friendly summary table
+
+```{r dpltByCylByCommentsSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+make_kable_output(dpltByCylByCommentsSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r dpltByCylByCommentsSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 8, fig.asp = 0.8, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$dp), " by ", label(mpg$cyl), " by ", label(mpg$comments), ".", sep = "")}
+make_complete_output(dpltByCylByCommentsSummaryExample)
+```
+
+## POSIXct Date {.tabset .tabset-fade .tabset-pills}
+
+For a date variable <b>x</b>, we need to specify <b>x</b>, the <b>data</b>, and <b>difftime_units</b>.
+
+```{r dpctSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+dpctSummaryExample <- data_summary(x = "dpct", data = mpg, difftime_units = "weeks")
+```
+
+### Show method to output table and plot
+
+```{r dpctSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(dpctSummaryExample)
+```
+
+### Output the summary table
+
+```{r dpctSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(dpctSummaryExample)
+```
+
+### Output the plot
+
+```{r dpctSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(dpctSummaryExample)
+```
+
+### Generate knitr friendly summary table
+
+```{r dpctSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+make_kable_output(dpctSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r dpctSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$dp), ".", sep = "")}
+make_complete_output(dpctSummaryExample)
+```
+
+## POSIXct Date By {.tabset .tabset-fade .tabset-pills}
+
+For a date variable with by, we need to specify <b>x</b>, a <b>by</b> variable, the <b>data</b>, and <b>difftime_units</b>.
+
+```{r dpctByCylSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+dpctByCylSummaryExample <- data_summary(x = "dpct", by = "cyl", data = mpg, difftime_units = "weeks")
+```
+
+### Show method to output table and plot
+
+```{r dpctByCylSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(dpctByCylSummaryExample)
+```
+
+### Output the summary table
+
+```{r dpctByCylSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(dpctByCylSummaryExample)
+```
+
+### Output the plot
+
+```{r dpctByCylSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7}
+data_summary_plot(dpctByCylSummaryExample)
+```
+
+### Generate a knitr friendly summary table
+
+```{r dpctByCylSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+make_kable_output(dpctByCylSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r dpctByCylSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 7, fig.asp = 0.7, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$dp), " by ", label(mpg$cyl), ".", sep = "")}
+make_complete_output(dpctByCylSummaryExample)
+```
+
+## POSIXct Date By By {.tabset .tabset-fade .tabset-pills}
+
+For a date variable with two or more by variables, we need to specify <b>x</b>, the <b>by</b> variables as a character string, the <b>data</b>, and <b>difftime_units</b>.
+
+```{r dpctByCylByCommentsSummaryExample, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+dpctByCylByCommentsSummaryExample <- data_summary(x = "dpct", by = c("cyl", "comments"), data = mpg, difftime_units = "weeks")
+```
+
+### Show method to output table and plot
+
+```{r dpctByCylByCommentsSummaryExampleShow, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+show(dpctByCylByCommentsSummaryExample)
+```
+
+### Output the summary table
+
+```{r dpctByCylByCommentsSummaryExampleTable, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE}
+data_summary_table(dpctByCylByCommentsSummaryExample)
+```
+
+### Output the plot
+
+```{r dpctByCylByCommentsSummaryExamplePlot, eval = TRUE, echo = TRUE, results = TRUE, warning = FALSE, message = FALSE, fig.width = 8, fig.asp = 0.8}
+data_summary_plot(dpctByCylByCommentsSummaryExample)
+```
+
+### Generate a knitr friendly summary table
+
+```{r dpctByCylByCommentsSummaryExampleKnitrTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
+make_kable_output(dpctByCylByCommentsSummaryExample)
+```
+
+### Generate knitr friendly output
+
+```{r dpctByCylByCommentsSummaryExampleComplete, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE, fig.width = 8, fig.asp = 0.8, fig.align = 'center', fig.cap = paste("Stacked barplot of ", label(mpg$dp), " by ", label(mpg$cyl), " by ", label(mpg$comments), ".", sep = "")}
+make_complete_output(dpctByCylByCommentsSummaryExample)
 ```
 
 ## Difftime {.tabset .tabset-fade .tabset-pills}
