@@ -1,4 +1,6 @@
 ---
+title: "Data Summaries in R"
+author: "Wade K. Copeland"
 bibliography: data_summaries.bib
 biblio-style: apalike
 link-citations: yes
