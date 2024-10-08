@@ -7,8 +7,8 @@ output:
     theme: default
     highlight: textmate
     code_folding: show
-    mathjax: local
-    self_contained: FALSE
+    mathjax: default
+    self_contained: TRUE
     number_sections: FALSE
 ---
 
@@ -2161,6 +2161,3 @@ sessionInfo()
 <!-- ``` -->
 
 # References
-
-<!-- This is needed to resize iframe content. Please ignore if duplicationg this R markdown file --> 
-<script type="text/javascript" src="https://www.waderstats.com/wp-includes/js/iframe-resizer/js/iframeResizer.contentWindow.min.js" defer></script>
