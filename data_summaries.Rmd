@@ -25,7 +25,7 @@ output:
 
 An essential part of any data analysis project is to understand the data at hand.  For this task, we will create a function that takes as input a variable from the data, a categorical variable to describe by, and returns summary tables and plots.
 
-This presentation uses the R programming language and assumes the end user is taking advantage of RStudio IDE to compile their R markdown files into HTML [@Rlang2019; @Rstudio].  All of the files needed to reproduce these results can be downloaded from the Git repository <code>git clone <span>https</span>://git.waderstats.com/data_summaries/</code>.
+This presentation uses the R programming language and assumes the end user is taking advantage of RStudio IDE to compile their R markdown files into HTML [@Rlang2019; @Rstudio].  All of the files needed to reproduce these results can be downloaded from the Git repository <a href="https://github.com/wkingc/data-summaries" target="_blank">https://github.com/wkingc/data-summaries</a>.
 
 # Required Libraries
 
