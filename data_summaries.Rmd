@@ -136,560 +136,585 @@ If you find any bugs or have recommendations, let me know in the comments!
 setOldClass(c("gg", "ggplot"))
 
 dataSummaries <- setClass(
-  "dataSummaries",
-  
-  slots = c(
-    x = "character",
-    by = "character",
-    data = "data.frame",
-    difftime_units = "character",
-    xLab = "character",
-    byLab = "character",
-    table = "data.frame",
-    plot = "ggplot"
-  ),
-  
-  prototype = list(
-    x = character(0),
-    by = character(0),
-    data = data.frame(),
-    difftime_units = character(0),
-    xLab = character(0),
-    byLab = character(0),
-    table = data.frame(),
-    plot = ggplot()
-  )
+    "dataSummaries",
+    
+    slots = c(
+        x = "character",
+        by = "character",
+        data = "data.frame",
+        difftime_units = "character",
+        xLab = "character",
+        byLab = "character",
+        table = "data.frame",
+        plot = "ggplot"
+    ),
+    
+    prototype = list(
+        x = character(0),
+        by = character(0),
+        data = data.frame(),
+        difftime_units = character(0),
+        xLab = character(0),
+        byLab = character(0),
+        table = data.frame(),
+        plot = ggplot()
+    )
 )
 
 dataSummariesCharacter <- setClass(
-  "dataSummariesCharacter",
-  
-  slots = c(
-    type = "character"
-  ),
-  
-  prototype = list(
-    type = character(0)
-  ),
-  
-  contains = "dataSummaries"
+    "dataSummariesCharacter",
+    
+    slots = c(
+        type = "character"
+    ),
+    
+    prototype = list(
+        type = character(0)
+    ),
+    
+    contains = "dataSummaries"
 )
 
 dataSummariesNumeric <- setClass(
-  "dataSummariesNumeric",
-  
-  slots = c(
-    type = "character"
-  ),
-  
-  prototype = list(
-    type = character(0)
-  ),
-  
-  contains = "dataSummaries"
+    "dataSummariesNumeric",
+    
+    slots = c(
+        type = "character"
+    ),
+    
+    prototype = list(
+        type = character(0)
+    ),
+    
+    contains = "dataSummaries"
 )
 
 dataSummariesDate <- setClass(
-  "dataSummariesDate",
-  
-  slots = c(
-    type = "character"
-  ),
-  
-  prototype = list(
-    type = character(0)
-  ),
-  
-  contains = "dataSummaries"
+    "dataSummariesDate",
+    
+    slots = c(
+        type = "character"
+    ),
+    
+    prototype = list(
+        type = character(0)
+    ),
+    
+    contains = "dataSummaries"
 )
 
 dataSummariesDifftime <- setClass(
-  "dataSummariesDifftime",
-  
-  slots = c(
-    type = "character"
-  ),
-  
-  prototype = list(
-    type = character(0)
-  ),
-  
-  contains = "dataSummaries"
+    "dataSummariesDifftime",
+    
+    slots = c(
+        type = "character"
+    ),
+    
+    prototype = list(
+        type = character(0)
+    ),
+    
+    contains = "dataSummaries"
 )
 
 invisible(setGeneric(name = "dataSummariesSetup", def = function(object) standardGeneric("dataSummariesSetup")))
-setMethod(f = "dataSummariesSetup",
-          signature = "dataSummaries", 
-          definition = function(object) 
-          {
-            x = object@x
-            by = object@by
-            data = object@data
+setMethod(
+    f = "dataSummariesSetup",
+    signature = "dataSummaries", 
+    definition = function(object) 
+    {
+        x = object@x
+        by = object@by
+        data = object@data
+        
+        xLab <- label(data[, x])
+        colnames(data)[which(colnames(data) == x)] <- "var"
+        
+        if (length(by) == 0) {
+            data$by <- factor(data$by <- "")
+            label(data$by) <- ""
+            byLab <- label(data$by)
+        } else {
+            data$by <- interaction(data[, by], sep = ", ")
+            byLab <- paste(label(data[, by]), collapse = " by ")
             
-            xLab <- label(data[, x])
-            colnames(data)[which(colnames(data) == x)] <- "var"
-            
-            if (length(by) == 0) {
-              data$by <- factor(data$by <- "")
-              label(data$by) <- ""
-              byLab <- label(data$by)
-            } else {
-              data$by <- interaction(data[, by], sep = ", ")
-              byLab <- paste(label(data[, by]), collapse = " by ")
-              
-              overall <- data
-              overall$by <- "Overall"
-              data <- rbind(data, overall)
-            }
-            
-            data <- data[, c("var", "by")]
-            
-            if("labelled" %in% class(data$var)) {
-              class(data$var) <- class(data$var)[(-1)*which(class(data$var) == "labelled")]
-            }
-            
-            object@xLab <- xLab
-            object@byLab <- byLab
-            object@data <- data
-            
-            if (any(c("character", "factor", "logical") %in% class(data$var))) { 
-              return(dataSummariesCharacter(object, type = class(data$var)))
-            } else if (any(c("numeric", "integer") %in% class(data$var))) {
-              return(dataSummariesNumeric(object, type = class(data$var))) 
-            } else if (any(c("Date", "POSIXlt", "POSIXct", "POSIXt") %in% class(data$var))) {
-              if (length(object@difftime_units) == 0) stop("You need to specify the units for the difference in time.  See help(difftime) for additional information.")
-              return(dataSummariesDate(object, type = class(data$var))) 
-            } else if ("difftime" %in% class(data$var)) {
-              if (length(object@difftime_units) == 0) stop("You need to specify the units for the difference in time.  See help(difftime) for additional information.")
-              return(dataSummariesDifftime(object, type = class(data$var))) 
-            } else {
-              stop("x is an unsupported class")
-            }
-          }
+            overall <- data
+            overall$by <- "Overall"
+            data <- rbind(data, overall)
+        }
+        
+        data <- data[, c("var", "by")]
+        
+        if ("labelled" %in% class(data$var)) {
+            class(data$var) <- class(data$var)[(-1)*which(class(data$var) == "labelled")]
+        }
+        
+        object@xLab <- xLab
+        object@byLab <- byLab
+        object@data <- data
+        
+        if (any(c("character", "factor", "logical") %in% class(data$var))) { 
+            return(dataSummariesCharacter(object, type = class(data$var)))
+        } else if (any(c("numeric", "integer") %in% class(data$var))) {
+            return(dataSummariesNumeric(object, type = class(data$var))) 
+        } else if (any(c("Date", "POSIXlt", "POSIXct", "POSIXt") %in% class(data$var))) {
+            if (length(object@difftime_units) == 0) stop("You need to specify the units for the difference in time.  See help(difftime) for additional information.")
+            return(dataSummariesDate(object, type = class(data$var))) 
+        } else if ("difftime" %in% class(data$var)) {
+            if (length(object@difftime_units) == 0) stop("You need to specify the units for the difference in time.  See help(difftime) for additional information.")
+            return(dataSummariesDifftime(object, type = class(data$var))) 
+        } else {
+            stop("x is an unsupported class")
+        }
+    }
 )
 
 invisible(setGeneric(name = "data_summary_switch", def = function(object) standardGeneric("data_summary_switch")))
 
-setMethod(f = "data_summary_switch",
-          signature = "dataSummariesCharacter", 
-          definition = function(object) 
-          {
-            xLab <- object@xLab
-            byLab <- object@byLab
-            data <- object@data
-            
-            freqs <- table(data$var, data$by, useNA = "ifany", dnn = c(xLab, byLab))
-            
-            rownames(freqs)[which(is.na(rownames(freqs)))] <- "R NA Value"
-            colnames(freqs)[which(is.na(colnames(freqs)))] <- "R NA Value" 
-            
-            props <- round(100*prop.table(freqs, 2), 2)
-            
-            res <- freqs
-            for (i in 1:dim(freqs)[2]) {
-              res[, i] <- paste(freqs[, i], " (", props[, i], "%)", sep = "")
-            }
-            res <- as.data.frame(res)
-            colnames(res) <- c("var", "by", "freq")
-            res <- dcast(res, var ~ by, value.var = "freq")
-            colnames(res)[1] <- xLab
-            if (byLab == "") colnames(res)[2] <- "n (%)"
-            
-            pData <- as.data.frame(props)
-            colnames(pData) <- c("var", "by", "freq")
-            
-            levs <- as.character(pData$var)
-            tmp <- nchar(levs)
-            strCombRes <- list()
-            for (k in 1:length(levs)) {
-              strRes <- list()
-              j = 0
-              for (i in 1:ceiling(max(tmp)/30)) {
+setMethod(
+    f = "data_summary_switch",
+    signature = "dataSummariesCharacter", 
+    definition = function(object) 
+    {
+        xLab <- object@xLab
+        byLab <- object@byLab
+        data <- object@data
+        
+        freqs <- table(data$var, data$by, useNA = "ifany", dnn = c(xLab, byLab))
+        
+        rownames(freqs)[which(is.na(rownames(freqs)))] <- "R NA Value"
+        colnames(freqs)[which(is.na(colnames(freqs)))] <- "R NA Value" 
+        
+        props <- round(100*prop.table(freqs, 2), 2)
+        
+        res <- freqs
+        for (i in 1:dim(freqs)[2]) {
+            res[, i] <- paste(freqs[, i], " (", props[, i], "%)", sep = "")
+        }
+        res <- as.data.frame(res)
+        colnames(res) <- c("var", "by", "freq")
+        res <- dcast(res, var ~ by, value.var = "freq")
+        colnames(res)[1] <- xLab
+        if (byLab == "") colnames(res)[2] <- "n (%)"
+        
+        pData <- as.data.frame(props)
+        colnames(pData) <- c("var", "by", "freq")
+        
+        levs <- as.character(pData$var)
+        tmp <- nchar(levs)
+        strCombRes <- list()
+        for (k in 1:length(levs)) {
+            strRes <- list()
+            j = 0
+            for (i in 1:ceiling(max(tmp)/30)) {
                 strRes[[i]] <- substr(levs[k], j, 30*i)
                 j = 30*i + 1
-              }
-              strCombRes[[k]] <- unlist(strRes)    
             }
+            strCombRes[[k]] <- unlist(strRes)    
+        }
+        
+        foo <- function(x) {
+            if (!(length(which(x == "")) == 0)) x <- x[-1*which(x == "")]
+            x <- paste(x, collapse = "\n")
             
-            foo <- function(x) {
-              if (!(length(which(x == "")) == 0)) x <- x[-1*which(x == "")]
-              x <- paste(x, collapse = "\n")
-              
-              return(x)
-            }
-            
-            levs <- unlist(lapply(strCombRes, foo))
-            
-            pData$names <- factor(rownames(pData), levels = rownames(pData), labels = levs)
-            pData <- pData[, -1]
-            
-            colfunc <- colorRampPalette(c("#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00"))
-            colors <- colfunc(length(levels(pData$names)))
-            
-            p = ggplot(data = pData, aes(x = by, y = freq, fill = names)) +
-              scale_fill_manual(values = colors) + 
-              geom_bar(stat = "identity") + 
-              xlab(paste(strwrap(xLab, width = 60), collapse = "\n")) +
-              ylab("Percent") +
-              theme(axis.line = element_line(colour = "black"),
-                    panel.border = element_rect(colour = "black", fill = NA, size = 1),
-                    axis.text = element_text(size = 12),
-                    axis.text.x = element_text(angle = 50, hjust = 1),
-                    axis.title = element_text(size = 12),
-                    legend.title = element_blank(),
-                    legend.position = "right",
-                    panel.grid = element_line(color = "lightgray"),
-                    panel.background = element_rect(fill = "white", colour = "white"))
-            
-            object@table <- res
-            object@plot <- p
-            
-            return(object)
-          }
+            return(x)
+        }
+        
+        levs <- unlist(lapply(strCombRes, foo))
+        
+        pData$names <- factor(rownames(pData), levels = rownames(pData), labels = levs)
+        pData <- pData[, -1]
+        
+        colfunc <- colorRampPalette(c("#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00"))
+        colors <- colfunc(length(levels(pData$names)))
+        
+        p = ggplot(data = pData, aes(x = by, y = freq, fill = names)) +
+            scale_fill_manual(values = colors) + 
+            geom_bar(stat = "identity") + 
+            xlab(paste(strwrap(xLab, width = 60), collapse = "\n")) +
+            ylab("Percent") +
+            theme(
+                axis.line = element_line(colour = "black"),
+                panel.border = element_rect(colour = "black", fill = NA, size = 1),
+                axis.text = element_text(size = 12),
+                axis.text.x = element_text(angle = 50, hjust = 1),
+                axis.title = element_text(size = 12),
+                legend.title = element_blank(),
+                legend.position = "right",
+                panel.grid = element_line(color = "lightgray"),
+                panel.background = element_rect(fill = "white", colour = "white"))
+        
+        object@table <- res
+        object@plot <- p
+        
+        return(object)
+    }
 )
 
-setMethod(f = "data_summary_switch",
-          signature = "dataSummariesNumeric", 
-          definition = function(object) 
-          {
-            xLab <- object@xLab
-            byLab <- object@byLab
-            data <- object@data
+setMethod(
+    f = "data_summary_switch",
+    signature = "dataSummariesNumeric", 
+    definition = function(object) 
+    {
+        xLab <- object@xLab
+        byLab <- object@byLab
+        data <- object@data
+        
+        if (any(is.na(data$by))) {
+            byLevs <- levels(data$by)
+            data$by <- as.character(data$by)
             
-            if (any(is.na(data$by))) {
-              byLevs <- levels(data$by)
-              data$by <- as.character(data$by)
-              
-              data$by[which(is.na(as.character(data$by)))] <- "R NA Value"
-              data$by <- factor(data$by, levels = c(byLevs, "R NA Value"))
-            }
-            
-            percMiss <- function(x) res <- round((length(which(is.na(x)))/length(x))*100, 2)
-            
-            res <- data %>%
-              group_by(by) %>%
-              summarize(label = xLab,
-                        n = length(na.omit(var)),
-                        miss = percMiss(var),
-                        mean = round(mean(var, na.rm = TRUE), 2),
-                        sd = round(sd(var, na.rm = TRUE), 2),
-                        median = round(median(var, na.rm = TRUE), 2),
-                        mad = round(mad(var, na.rm = TRUE), 2),
-                        q25 = round(quantile(var, probs = 0.25, na.rm = TRUE, type = 1), 2),
-                        q75 = round(quantile(var, probs = 0.75, na.rm = TRUE, type = 1), 2),
-                        IQR = round(IQR(var, na.rm = TRUE), 2),
-                        min = round(min(var, na.rm = TRUE), 2),
-                        max = round(max(var, na.rm = TRUE), 2)
-              )
-            
-            res <- data.frame(res)
-            
-            colnames(res) <- c(byLab, "Label", "N", "P NA", "Mean", "S Dev", "Med", "MAD", "25th P", "75th P", "IQR", "Min", "Max")
-            
-            pData <- na.omit(data.frame(data[, c("var", "by")]))
-            
-            p = ggplot(data = pData, aes(x = by, y = var)) +
-              geom_boxplot(position = position_dodge(1), fill = "#2c7bb6") +
-              xlab(byLab) +
-              ylab(paste(strwrap(xLab, width = 40), collapse = "\n")) +
-              theme(axis.line = element_line(colour = "black"),
-                    panel.border = element_rect(colour = "black", fill = NA, size = 1),
-                    legend.position = "none",
-                    axis.text = element_text(size = 12),
-                    axis.text.x = element_text(angle = 50, hjust = 1),
-                    axis.title = element_text(size = 12), 
-                    panel.grid = element_line(color = "lightgray"),
-                    panel.background = element_rect(fill = "white", colour = "white"))
-            
-            object@table <- res
-            object@plot <- p
-            
-            return(object)
-          }
+            data$by[which(is.na(as.character(data$by)))] <- "R NA Value"
+            data$by <- factor(data$by, levels = c(byLevs, "R NA Value"))
+        }
+        
+        percMiss <- function(x) res <- round((length(which(is.na(x)))/length(x))*100, 2)
+        
+        res <- data %>%
+            group_by(by) %>%
+            summarize(
+                label = xLab,
+                n = length(na.omit(var)),
+                miss = percMiss(var),
+                mean = round(mean(var, na.rm = TRUE), 2),
+                sd = round(sd(var, na.rm = TRUE), 2),
+                median = round(median(var, na.rm = TRUE), 2),
+                mad = round(mad(var, na.rm = TRUE), 2),
+                q25 = round(quantile(var, probs = 0.25, na.rm = TRUE, type = 1), 2),
+                q75 = round(quantile(var, probs = 0.75, na.rm = TRUE, type = 1), 2),
+                IQR = round(IQR(var, na.rm = TRUE), 2),
+                min = round(min(var, na.rm = TRUE), 2),
+                max = round(max(var, na.rm = TRUE), 2)
+            )
+        
+        res <- data.frame(res)
+        
+        colnames(res) <- c(byLab, "Label", "N", "P NA", "Mean", "S Dev", "Med", "MAD", "25th P", "75th P", "IQR", "Min", "Max")
+        
+        pData <- na.omit(data.frame(data[, c("var", "by")]))
+        
+        p = ggplot(data = pData, aes(x = by, y = var)) +
+            geom_boxplot(position = position_dodge(1), fill = "#2c7bb6") +
+            xlab(byLab) +
+            ylab(paste(strwrap(xLab, width = 40), collapse = "\n")) +
+            theme(
+                axis.line = element_line(colour = "black"),
+                panel.border = element_rect(colour = "black", fill = NA, size = 1),
+                legend.position = "none",
+                axis.text = element_text(size = 12),
+                axis.text.x = element_text(angle = 50, hjust = 1),
+                axis.title = element_text(size = 12), 
+                panel.grid = element_line(color = "lightgray"),
+                panel.background = element_rect(fill = "white", colour = "white"))
+        
+        object@table <- res
+        object@plot <- p
+        
+        return(object)
+    }
 )
 
-setMethod(f = "data_summary_switch",
-          signature = "dataSummariesDate", 
-          definition = function(object) 
-          {
-            xLab <- object@xLab
-            byLab <- object@byLab
-            data <- object@data
-            difftime_units <- object@difftime_units
+setMethod(
+    f = "data_summary_switch",
+    signature = "dataSummariesDate", 
+    definition = function(object) 
+    {
+        xLab <- object@xLab
+        byLab <- object@byLab
+        data <- object@data
+        difftime_units <- object@difftime_units
+        
+        if (any(is.na(data$by))) {
+            byLevs <- levels(data$by)
+            data$by <- as.character(data$by)
             
-            if (any(is.na(data$by))) {
-              byLevs <- levels(data$by)
-              data$by <- as.character(data$by)
-              
-              data$by[which(is.na(as.character(data$by)))] <- "R NA Value"
-              data$by <- factor(data$by, levels = c(byLevs, "R NA Value"))
-            }
+            data$by[which(is.na(as.character(data$by)))] <- "R NA Value"
+            data$by <- factor(data$by, levels = c(byLevs, "R NA Value"))
+        }
+        
+        percMiss <- function(x) round((length(which(is.na(x)))/length(x))*100, 2)
+        
+        sdDate <- function(x) {
+            res <- difftime(x, mean(x, na.rm = TRUE), units = "secs")
+            res <- as.numeric(as.character(res))
+            res <- sd(res, na.rm = TRUE)
+            res <- as.difftime(res, units = "secs")
+            units(res) <- difftime_units
             
-            percMiss <- function(x) round((length(which(is.na(x)))/length(x))*100, 2)
+            return(res)
+        }
+        
+        sdDate(data$var)
+        
+        madDate <- function(x) {
+            res <- difftime(x, mean(x, na.rm = TRUE), units = "secs")
+            res <- as.numeric(as.character(res))
+            res <- mad(res, na.rm = TRUE)
+            res <- as.difftime(res, units = "secs")
+            units(res) <- difftime_units
             
-            sdDate <- function(x) {
-              res <- difftime(x, mean(x, na.rm = TRUE), units = "secs")
-              res <- as.numeric(as.character(res))
-              res <- sd(res, na.rm = TRUE)
-              res <- as.difftime(res, units = "secs")
-              units(res) <- difftime_units
-
-              return(res)
-            }
-            
-            sdDate(data$var)
-            
-            madDate <- function(x) {
-              res <- difftime(x, mean(x, na.rm = TRUE), units = "secs")
-              res <- as.numeric(as.character(res))
-              res <- mad(res, na.rm = TRUE)
-              res <- as.difftime(res, units = "secs")
-              units(res) <- difftime_units
-              
-              return(res)
-            }
-            
-            dquantile <- function(x, probs){
-              sx <- sort(x)
-              pos <- round(probs*length(x))
-              return(sx[pos])
-            }
-            
-            q25Date <- function(x) dquantile(x, probs = 0.25)
-  
-            q75Date <- function(x) dquantile(x, probs = 0.75)
-
-            IQRdate <- function(x) {
-              res <- difftime(dquantile(x, probs = 0.75), dquantile(x, probs = 0.25), units = "secs")
-              units(res) <- difftime_units
-              return(res)
-            }
-            
-            res <- data %>%
-              group_by(by) %>%
-              summarize(label = xLab,
-                        n = length(na.omit(var)),
-                        miss = percMiss(var),
-                        mean = mean(var, na.rm = TRUE),
-                        sd = round(sdDate(var), 2),
-                        median = median(var, na.rm = TRUE),
-                        mad = round(madDate(var), 2),
-                        q25 = q25Date(var),
-                        q75 = q75Date(var),
-                        IQR = IQRdate(var),
-                        min = min(var, na.rm = TRUE),
-                        max = max(var, na.rm = TRUE)
-              )
-            
-            res <- data.frame(res)
-            
-            colnames(res) <- c(byLab, "Label", "N", "P NA", "Mean", "S Dev", "Med", "MAD", "25th P", "75th P", "IQR", "Min", "Max")
-            
-            pData <- na.omit(data.frame(data[, c("var", "by")]))
-  
-            if("POSIXlt" %in% class(pData$var)) pData$var <- as.POSIXct(pData$var)
-
-            p = ggplot(data = pData, aes(x = by, y = var)) +
-              geom_boxplot(position = position_dodge(1), fill = "#2c7bb6") +
-              xlab(byLab) +
-              ylab(paste(strwrap(xLab, width = 40), collapse = "\n")) +
-              theme(axis.line = element_line(colour = "black"),
-                    panel.border = element_rect(colour = "black", fill = NA, size = 1),
-                    legend.position = "none",
-                    axis.text = element_text(size = 12),
-                    axis.text.x = element_text(angle = 50, hjust = 1),
-                    axis.title = element_text(size = 12), 
-                    panel.grid = element_line(color = "lightgray"),
-                    panel.background = element_rect(fill = "white", colour = "white"))
-            
-            object@table <- res
-            object@plot <- p
-            
-            return(object)
-          }
+            return(res)
+        }
+        
+        dquantile <- function(x, probs){
+            sx <- sort(x)
+            pos <- round(probs*length(x))
+            return(sx[pos])
+        }
+        
+        q25Date <- function(x) dquantile(x, probs = 0.25)
+        
+        q75Date <- function(x) dquantile(x, probs = 0.75)
+        
+        IQRdate <- function(x) {
+            res <- difftime(dquantile(x, probs = 0.75), dquantile(x, probs = 0.25), units = "secs")
+            units(res) <- difftime_units
+            return(res)
+        }
+        
+        res <- data %>%
+            group_by(by) %>%
+            summarize(
+                label = xLab,
+                n = length(na.omit(var)),
+                miss = percMiss(var),
+                mean = mean(var, na.rm = TRUE),
+                sd = round(sdDate(var), 2),
+                median = median(var, na.rm = TRUE),
+                mad = round(madDate(var), 2),
+                q25 = q25Date(var),
+                q75 = q75Date(var),
+                IQR = IQRdate(var),
+                min = min(var, na.rm = TRUE),
+                max = max(var, na.rm = TRUE)
+            )
+        
+        res <- data.frame(res)
+        
+        colnames(res) <- c(byLab, "Label", "N", "P NA", "Mean", "S Dev", "Med", "MAD", "25th P", "75th P", "IQR", "Min", "Max")
+        
+        pData <- na.omit(data.frame(data[, c("var", "by")]))
+        
+        if ("POSIXlt" %in% class(pData$var)) pData$var <- as.POSIXct(pData$var)
+        
+        p = ggplot(data = pData, aes(x = by, y = var)) +
+            geom_boxplot(position = position_dodge(1), fill = "#2c7bb6") +
+            xlab(byLab) +
+            ylab(paste(strwrap(xLab, width = 40), collapse = "\n")) +
+            theme(
+                axis.line = element_line(colour = "black"),
+                panel.border = element_rect(colour = "black", fill = NA, size = 1),
+                legend.position = "none",
+                axis.text = element_text(size = 12),
+                axis.text.x = element_text(angle = 50, hjust = 1),
+                axis.title = element_text(size = 12), 
+                panel.grid = element_line(color = "lightgray"),
+                panel.background = element_rect(fill = "white", colour = "white"))
+        
+        object@table <- res
+        object@plot <- p
+        
+        return(object)
+    }
 )
 
-setMethod(f = "data_summary_switch",
-          signature = "dataSummariesDifftime", 
-          definition = function(object) 
-          {
-            xLab <- object@xLab
-            byLab <- object@byLab
-            data <- object@data
-            difftime_units <- object@difftime_units
+setMethod(
+    f = "data_summary_switch",
+    signature = "dataSummariesDifftime", 
+    definition = function(object) 
+    {
+        xLab <- object@xLab
+        byLab <- object@byLab
+        data <- object@data
+        difftime_units <- object@difftime_units
+        
+        if (any(is.na(data$by))) {
+            byLevs <- levels(data$by)
+            data$by <- as.character(data$by)
             
-            if (any(is.na(data$by))) {
-              byLevs <- levels(data$by)
-              data$by <- as.character(data$by)
-              
-              data$by[which(is.na(as.character(data$by)))] <- "R NA Value"
-              data$by <- factor(data$by, levels = c(byLevs, "R NA Value"))
-            }
-            
-            percMiss <- function(x) res <- round((length(which(is.na(x)))/length(x))*100, 2)
-            
-            units(data$var) <- "days"
-            
-            meanDate <- function(x) {
-              res <- mean(x, na.rm = TRUE)
-              units(res) <- difftime_units
-              return(res)
-            }
-            
-            medianDate <- function(x) {
-              res <- median(x, na.rm = TRUE)
-              units(res) <- difftime_units
-              return(res)
-            }
-            
-            sdDate <- function(x) {
-              res <- as.difftime(sd(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
-              units(res) <- difftime_units
-              return(res)
-            }
-            
-            madDate <- function(x) {
-              res <- as.difftime(mad(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
-              units(res) <- difftime_units
-              return(res)
-            }
-            
-            q25Date <- function(x) {
-              res <- as.difftime(quantile(as.numeric(x), probs = 0.25, na.rm = TRUE, type = 1), units = "days")
-              units(res) <- difftime_units
-              return(res)
-            }
-            
-            q75Date <- function(x) {
-              res <- as.difftime(quantile(as.numeric(x), probs = 0.75, na.rm = TRUE, type = 1), units = "days")
-              units(res) <- difftime_units
-              return(res)
-            }
-            
-            IQRdate <- function(x) {
-              res <- as.difftime(IQR(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
-              units(res) <- difftime_units
-              return(res)
-            }
-            
-            minDate <- function(x) {
-              res <- as.difftime(min(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
-              units(res) <- difftime_units
-              return(res)
-            }
-            
-            maxDate <- function(x) {
-              res <- as.difftime(max(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
-              units(res) <- difftime_units
-              return(res)
-            }  
-            
-            res <- data %>%
-              group_by(by) %>%
-              summarize(label = xLab,
-                        n = length(na.omit(var)),
-                        miss = percMiss(var),
-                        mean = round(meanDate(var), 2),
-                        sd = round(sdDate(var), 2),
-                        median = round(medianDate(var), 2),
-                        mad = round(madDate(var), 2),
-                        q25 = round(q25Date(var), 2),
-                        q75 = round(q75Date(var), 2),
-                        IQR = round(IQRdate(var), 2),
-                        min = round(minDate(var), 2),
-                        max = round(maxDate(var), 2)
-              )
-            
-            res <- data.frame(res)
-            
-            colnames(res) <- c(byLab, "Label", "N", "P NA", "Mean", "S Dev", "Med", "MAD", "25th P", "75th P", "IQR", "Min", "Max")
-            
-            pData <- na.omit(data.frame(data[, c("var", "by")]))
-            units(pData$var) <- difftime_units
-            
-            p = ggplot(data = pData, aes(x = by, y = var)) +
-              geom_boxplot(position = position_dodge(1), fill = "#2c7bb6") +
-              xlab(byLab) +
-              ylab(paste(strwrap(xLab, width = 40), collapse = "\n")) +
-              theme(axis.line = element_line(colour = "black"),
-                    panel.border = element_rect(colour = "black", fill = NA, size = 1),
-                    legend.position = "none",
-                    axis.text = element_text(size = 12),
-                    axis.text.x = element_text(angle = 50, hjust = 1),
-                    axis.title = element_text(size = 12), 
-                    panel.grid = element_line(color = "lightgray"),
-                    panel.background = element_rect(fill = "white", colour = "white"))
-            
-            object@table <- res
-            object@plot <- p
-            
-            return(object)
-          }
+            data$by[which(is.na(as.character(data$by)))] <- "R NA Value"
+            data$by <- factor(data$by, levels = c(byLevs, "R NA Value"))
+        }
+        
+        percMiss <- function(x) res <- round((length(which(is.na(x)))/length(x))*100, 2)
+        
+        units(data$var) <- "days"
+        
+        meanDate <- function(x) {
+            res <- mean(x, na.rm = TRUE)
+            units(res) <- difftime_units
+            return(res)
+        }
+        
+        medianDate <- function(x) {
+            res <- median(x, na.rm = TRUE)
+            units(res) <- difftime_units
+            return(res)
+        }
+        
+        sdDate <- function(x) {
+            res <- as.difftime(sd(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+            units(res) <- difftime_units
+            return(res)
+        }
+        
+        madDate <- function(x) {
+            res <- as.difftime(mad(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+            units(res) <- difftime_units
+            return(res)
+        }
+        
+        q25Date <- function(x) {
+            res <- as.difftime(quantile(as.numeric(x), probs = 0.25, na.rm = TRUE, type = 1), units = "days")
+            units(res) <- difftime_units
+            return(res)
+        }
+        
+        q75Date <- function(x) {
+            res <- as.difftime(quantile(as.numeric(x), probs = 0.75, na.rm = TRUE, type = 1), units = "days")
+            units(res) <- difftime_units
+            return(res)
+        }
+        
+        IQRdate <- function(x) {
+            res <- as.difftime(IQR(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+            units(res) <- difftime_units
+            return(res)
+        }
+        
+        minDate <- function(x) {
+            res <- as.difftime(min(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+            units(res) <- difftime_units
+            return(res)
+        }
+        
+        maxDate <- function(x) {
+            res <- as.difftime(max(as.numeric(x), na.rm = TRUE), format = "%X", units = "days")
+            units(res) <- difftime_units
+            return(res)
+        }  
+        
+        res <- data %>%
+            group_by(by) %>%
+            summarize(
+                label = xLab,
+                n = length(na.omit(var)),
+                miss = percMiss(var),
+                mean = round(meanDate(var), 2),
+                sd = round(sdDate(var), 2),
+                median = round(medianDate(var), 2),
+                mad = round(madDate(var), 2),
+                q25 = round(q25Date(var), 2),
+                q75 = round(q75Date(var), 2),
+                IQR = round(IQRdate(var), 2),
+                min = round(minDate(var), 2),
+                max = round(maxDate(var), 2)
+            )
+        
+        res <- data.frame(res)
+        
+        colnames(res) <- c(byLab, "Label", "N", "P NA", "Mean", "S Dev", "Med", "MAD", "25th P", "75th P", "IQR", "Min", "Max")
+        
+        pData <- na.omit(data.frame(data[, c("var", "by")]))
+        units(pData$var) <- difftime_units
+        
+        p = ggplot(data = pData, aes(x = by, y = var)) +
+            geom_boxplot(position = position_dodge(1), fill = "#2c7bb6") +
+            xlab(byLab) +
+            ylab(paste(strwrap(xLab, width = 40), collapse = "\n")) +
+            theme(
+                axis.line = element_line(colour = "black"),
+                panel.border = element_rect(colour = "black", fill = NA, size = 1),
+                legend.position = "none",
+                axis.text = element_text(size = 12),
+                axis.text.x = element_text(angle = 50, hjust = 1),
+                axis.title = element_text(size = 12), 
+                panel.grid = element_line(color = "lightgray"),
+                panel.background = element_rect(fill = "white", colour = "white"))
+        
+        object@table <- res
+        object@plot <- p
+        
+        return(object)
+    }
 )
 
-setMethod(f = "show",
-          signature = "dataSummaries", 
-          definition = function(object) 
-          {
-            print(object@table)
-            print(object@plot)
-          }
+setMethod(
+    f = "show",
+    signature = "dataSummaries", 
+    definition = function(object) 
+    {
+        print(object@table)
+        print(object@plot)
+    }
 )
 
 invisible(setGeneric(name = "make_kable_output", def = function(object) standardGeneric("make_kable_output")))
-setMethod(f = "make_kable_output",
-          signature = "dataSummaries", 
-          definition = function(object) 
-          {
-            if(object@byLab == "") {
-              print(kable(object@table, caption = paste("Summary statistics of ", object@xLab, ".", sep = ""), booktabs = TRUE) %>% 
-                      kable_styling(bootstrap_options = c("striped", "hover")))
-            } else {
-              print(kable(object@table, caption = paste("Summary statistics of ", object@xLab, " by ", object@byLab, ".", sep = ""), booktabs = TRUE) %>% 
-                      kable_styling(bootstrap_options = c("striped", "hover")))
-            }
-          }
+setMethod(
+    f = "make_kable_output",
+    signature = "dataSummaries", 
+    definition = function(object) 
+    {
+        if (object@byLab == "") {
+            print(
+                kable(
+                    object@table, caption = paste("Summary statistics of ", object@xLab, ".", sep = ""), booktabs = TRUE) %>% 
+                    kable_styling(bootstrap_options = c("striped", "hover")))
+        } else {
+            print(
+                kable(
+                    object@table, caption = paste("Summary statistics of ", object@xLab, " by ", object@byLab, ".", sep = ""), booktabs = TRUE) %>% 
+                    kable_styling(bootstrap_options = c("striped", "hover")))
+        }
+    }
 )
 
 invisible(setGeneric(name = "make_complete_output", def = function(object) standardGeneric("make_complete_output")))
-setMethod(f = "make_complete_output",
-          signature = "dataSummaries", 
-          definition = function(object) 
-          {
-            if(object@byLab == "") {
-              print(kable(object@table, caption = paste("Summary statistics of ", object@xLab, ".", sep = ""), booktabs = TRUE) %>% 
-                      kable_styling(bootstrap_options = c("striped", "hover")))
-            } else {
-              print(kable(object@table, caption = paste("Summary statistics of ", object@xLab, " by ", object@byLab, ".", sep = ""), booktabs = TRUE) %>% 
-                      kable_styling(bootstrap_options = c("striped", "hover")))
-            }
-            
-            print(object@plot)
-          }
+setMethod(
+    f = "make_complete_output",
+    signature = "dataSummaries", 
+    definition = function(object) 
+    {
+        if (object@byLab == "") {
+            print(
+                kable(
+                    object@table, caption = paste("Summary statistics of ", object@xLab, ".", sep = ""), booktabs = TRUE) %>% 
+                    kable_styling(bootstrap_options = c("striped", "hover")))
+        } else {
+            print(
+                kable(
+                    object@table, caption = paste("Summary statistics of ", object@xLab, " by ", object@byLab, ".", sep = ""), booktabs = TRUE) %>% 
+                    kable_styling(bootstrap_options = c("striped", "hover")))
+        }
+        
+        print(object@plot)
+    }
 )
 
 invisible(setGeneric(name = "data_summary_table", def = function(object) standardGeneric("data_summary_table")))
-setMethod(f = "data_summary_table",
-          signature = "dataSummaries", 
-          definition = function(object) 
-          {
-            object@table
-          }
+setMethod(
+    f = "data_summary_table",
+    signature = "dataSummaries", 
+    definition = function(object) 
+    {
+        object@table
+    }
 )
 
 invisible(setGeneric(name = "data_summary_plot", def = function(object) standardGeneric("data_summary_plot")))
-setMethod(f = "data_summary_plot",
-          signature = "dataSummaries", 
-          definition = function(object) 
-          {
-            object@plot
-          }
+setMethod(
+    f = "data_summary_plot",
+    signature = "dataSummaries", 
+    definition = function(object) 
+    {
+        object@plot
+    }
 )
 
 data_summary <- function(x, by = character(0), data, difftime_units = character(0)) {
-  object = dataSummaries(x = x, data = data, by = by, difftime_units = difftime_units)
-  object = dataSummariesSetup(object)
-  object = data_summary_switch(object)
+    object = dataSummaries(x = x, data = data, by = by, difftime_units = difftime_units)
+    object = dataSummariesSetup(object)
+    object = data_summary_switch(object)
 }
 ```
 
@@ -1969,168 +1994,171 @@ The full summaries with plots are useful for understanding the data and diagnosi
 
 ```{r UnivariateDataSummaryTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
 invisible(setGeneric(name = "univariate_data_summary", def = function(object) standardGeneric("univariate_data_summary")))
-setMethod(f = "univariate_data_summary",
-          signature = "dataSummaries", 
-          definition = function(object) 
-          {
-            if(all(c("Mean", "S Dev") %in% colnames(object@table))) {
-              xlab <- paste("<b>", object@xLab, ", Mean (SD)</b>", sep = "")
-              
-              if(length(object@difftime_units) > 0) {
+setMethod(
+    f = "univariate_data_summary",
+    signature = "dataSummaries", 
+    definition = function(object) 
+    {
+        if (all(c("Mean", "S Dev") %in% colnames(object@table))) {
+            xlab <- paste("<b>", object@xLab, ", Mean (SD)</b>", sep = "")
+            
+            if (length(object@difftime_units) > 0) {
                 res <- paste(object@table[, "Mean"], " (", object@table[, "S Dev"], " ", object@difftime_units, ")", sep = "")
-              } else {
-                res <- paste(object@table[, "Mean"], " (", object@table[, "S Dev"], ")", sep = "")
-              }
-              
-              res <- data.frame(res)
-              res$rname <- xlab
-              res <- res[, c(2, 1)]
-              colnames(res) <- c("", "")
-              rownames(res) <- NULL
             } else {
-              xlab <- paste("<b>", object@xLab, ", n (%)", "</b>", sep = "")
-              res <- c("", object@table[, -1])
-              res <- data.frame(res, stringsAsFactors = FALSE)
-              res$rnames <- c(xlab, paste("&nbsp;&nbsp;", as.character(object@table[, 1]), sep = ""))
-              res <- res[, c(2, 1)]
-              colnames(res) <- c("", "")
-              rownames(res) <- NULL
+                res <- paste(object@table[, "Mean"], " (", object@table[, "S Dev"], ")", sep = "")
             }
             
-            return(res)
-          }
+            res <- data.frame(res)
+            res$rname <- xlab
+            res <- res[, c(2, 1)]
+            colnames(res) <- c("", "")
+            rownames(res) <- NULL
+        } else {
+            xlab <- paste("<b>", object@xLab, ", n (%)", "</b>", sep = "")
+            res <- c("", object@table[, -1])
+            res <- data.frame(res, stringsAsFactors = FALSE)
+            res$rnames <- c(xlab, paste("&nbsp;&nbsp;", as.character(object@table[, 1]), sep = ""))
+            res <- res[, c(2, 1)]
+            colnames(res) <- c("", "")
+            rownames(res) <- NULL
+        }
+        
+        return(res)
+    }
 )
 
 univariateDataSummaryList <- list(
-  manuSummary, 
-  modelSummary, 
-  displSummary, 
-  yearSummary, 
-  dpSummary, 
-  cylSummary, 
-  transSummary, 
-  drvSummary, 
-  ctySummary, 
-  hwySummary, 
-  flSummary, 
-  classSummary, 
-  rnSummary, 
-  rdifftimeSummary,
-  logicalSummary,
-  partySummary, 
-  commentsSummary,
-  missSummary
-  )
+    manuSummary, 
+    modelSummary, 
+    displSummary, 
+    yearSummary, 
+    dpSummary, 
+    cylSummary, 
+    transSummary, 
+    drvSummary, 
+    ctySummary, 
+    hwySummary, 
+    flSummary, 
+    classSummary, 
+    rnSummary, 
+    rdifftimeSummary,
+    logicalSummary,
+    partySummary, 
+    commentsSummary,
+    missSummary
+)
 
 cars_univariate_data_summary <- do.call("rbind", lapply(univariateDataSummaryList, univariate_data_summary))
 
-kable(cars_univariate_data_summary, caption = "Data summaries", booktabs = TRUE, escape = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+kable(cars_univariate_data_summary, caption = "Data summaries", booktabs = TRUE, escape = FALSE, format = "html") %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 ```
 
 ## By Data Summaries
 
 ```{r ByDataSummaryTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
 invisible(setGeneric(name = "by_data_summary", def = function(object) standardGeneric("by_data_summary")))
-setMethod(f = "by_data_summary",
-          signature = "dataSummaries", 
-          definition = function(object) 
-          {
-              if(all(c("Mean", "S Dev") %in% colnames(object@table))) {
-              res <- t(object@table[, c("Mean", "S Dev")])
-              
-              if(length(object@difftime_units) > 0) {
+setMethod(
+    f = "by_data_summary",
+    signature = "dataSummaries", 
+    definition = function(object) 
+    {
+        if (all(c("Mean", "S Dev") %in% colnames(object@table))) {
+            res <- t(object@table[, c("Mean", "S Dev")])
+            
+            if (length(object@difftime_units) > 0) {
                 res <- paste(object@table[, "Mean"], " (", object@table[, "S Dev"], " ", object@difftime_units, ")", sep = "")
-              } else {
-                res <- paste(object@table[, "Mean"], " (", object@table[, "S Dev"], ")", sep = "")
-              }
-              
-              res <- data.frame(t(res))
-              res$label <- paste("<b>", object@xLab, ", Mean (SD)</b>", sep = "")
-              rownames(res) <- NULL
-              res <- res[, c(which(colnames(res) == "label"), which(!(1:dim(res)[2] %in% which(colnames(res) == "label"))))]
-              colnames(res) <- c("", as.character(object@table[, 1]))
             } else {
-              res <- object@table
-              res[, 1] <- paste("&nbsp;&nbsp;", res[, 1], sep = "")
-              res <- rbind("", res)
-              res[1,1] <- paste("<b>", object@xLab, ", N (%)</b>", sep = "")
-              colnames(res)[1] <- ""
+                res <- paste(object@table[, "Mean"], " (", object@table[, "S Dev"], ")", sep = "")
             }
             
-            return(res)
-          }
+            res <- data.frame(t(res))
+            res$label <- paste("<b>", object@xLab, ", Mean (SD)</b>", sep = "")
+            rownames(res) <- NULL
+            res <- res[, c(which(colnames(res) == "label"), which(!(1:dim(res)[2] %in% which(colnames(res) == "label"))))]
+            colnames(res) <- c("", as.character(object@table[, 1]))
+        } else {
+            res <- object@table
+            res[, 1] <- paste("&nbsp;&nbsp;", res[, 1], sep = "")
+            res <- rbind("", res)
+            res[1,1] <- paste("<b>", object@xLab, ", N (%)</b>", sep = "")
+            colnames(res)[1] <- ""
+        }
+        
+        return(res)
+    }
 )
 
 byDataSummaryList <- list(
-  ctyByDrvSummary,
-  hwyByDrvSummary,
-  cylByDrvSummary,
-  dpByDrvSummary,
-  rnByDrvSummary,
-  rdifftimeByDrvSummary,
-  logicalByDrvSummary,
-  commentsByDrvSummary,
-  missByDrvSummary
+    ctyByDrvSummary,
+    hwyByDrvSummary,
+    cylByDrvSummary,
+    dpByDrvSummary,
+    rnByDrvSummary,
+    rdifftimeByDrvSummary,
+    logicalByDrvSummary,
+    commentsByDrvSummary,
+    missByDrvSummary
 )
 
 cars_by_data_summary <- do.call("rbind", lapply(byDataSummaryList, by_data_summary))
 
-kable(cars_by_data_summary, caption = "Data summaries", booktabs = TRUE, escape = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+kable(cars_by_data_summary, caption = "Data summaries", booktabs = TRUE, escape = FALSE, format = "html") %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 ```
 
 ## Bivariate Data Summaries
 
 ```{r BivariateDataSummaryTable, eval = TRUE, echo = TRUE, results = 'asis', warning = FALSE, message = FALSE}
 invisible(setGeneric(name = "bivariate_data_summary", def = function(object1, object2) standardGeneric("bivariate_data_summary")))
-setMethod(f = "bivariate_data_summary",
-          signature = "dataSummaries", 
-          definition = function(object1, object2) 
-          {
-            rnames <- c(paste("<b>", object1@byLab, "</b>", sep = ""), paste("&nbsp;&nbsp;", object1@table[, 1], sep = ""))
-            
-            if(length(object1@difftime_units) > 0) {
-              object1Res <- data.frame(c("", paste(object1@table[, "Mean"], " (", object1@table[, "S Dev"], " ", object1@difftime_units, ")", sep = "")), stringsAsFactors = FALSE)
-            } else {
-              object1Res <- data.frame(c("", paste(object1@table[, "Mean"], " (", object1@table[, "S Dev"], ")", sep = "")), stringsAsFactors = FALSE)
-            }       
-            
-            if(length(object2@difftime_units) > 0) {
-              object2Res <- data.frame(c("", paste(object2@table[, "Mean"], " (", object1@table[, "S Dev"], " ", object2@difftime_units, ")", sep = "")), stringsAsFactors = FALSE)
-            } else {
-              object2Res <- data.frame(c("", paste(object2@table[, "Mean"], " (", object2@table[, "S Dev"], ")", sep = "")), stringsAsFactors = FALSE)
-            }           
-            
-            res <- cbind(object1Res, object2Res)
-            res <- cbind(rnames, res)
-            
-            colnames(res) <- c("", paste(object1@xLab, ", Mean (SD)", sep = ""), paste(object2@xLab, ", Mean (SD)", sep = ""))
-            
-            return(res)
-          }
+setMethod(
+    f = "bivariate_data_summary",
+    signature = "dataSummaries", 
+    definition = function(object1, object2) 
+    {
+        rnames <- c(paste("<b>", object1@byLab, "</b>", sep = ""), paste("&nbsp;&nbsp;", object1@table[, 1], sep = ""))
+        
+        if (length(object1@difftime_units) > 0) {
+            object1Res <- data.frame(c("", paste(object1@table[, "Mean"], " (", object1@table[, "S Dev"], " ", object1@difftime_units, ")", sep = "")), stringsAsFactors = FALSE)
+        } else {
+            object1Res <- data.frame(c("", paste(object1@table[, "Mean"], " (", object1@table[, "S Dev"], ")", sep = "")), stringsAsFactors = FALSE)
+        }       
+        
+        if (length(object2@difftime_units) > 0) {
+            object2Res <- data.frame(c("", paste(object2@table[, "Mean"], " (", object1@table[, "S Dev"], " ", object2@difftime_units, ")", sep = "")), stringsAsFactors = FALSE)
+        } else {
+            object2Res <- data.frame(c("", paste(object2@table[, "Mean"], " (", object2@table[, "S Dev"], ")", sep = "")), stringsAsFactors = FALSE)
+        }           
+        
+        res <- cbind(object1Res, object2Res)
+        res <- cbind(rnames, res)
+        
+        colnames(res) <- c("", paste(object1@xLab, ", Mean (SD)", sep = ""), paste(object2@xLab, ", Mean (SD)", sep = ""))
+        
+        return(res)
+    }
 )
 
 cars_bivariate_data_summary <- rbind(
-  bivariate_data_summary(ctyBymanuSummary, hwyBymanuSummary),
-  bivariate_data_summary(ctyBymodelSummary, hwyBymodelSummary),
-  bivariate_data_summary(ctyByYearSummary, hwyByYearSummary),
-  bivariate_data_summary(ctyByCylSummary, hwyByCylSummary),
-  bivariate_data_summary(ctyBytransSummary, hwyBytransSummary),
-  bivariate_data_summary(ctyByDrvSummary, hwyByDrvSummary),
-  bivariate_data_summary(ctyByflSummary, hwyByflSummary),
-  bivariate_data_summary(ctyByclassSummary, hwyByclassSummary),
-  bivariate_data_summary(ctyByPartySummary, hwyByPartySummary),
-  bivariate_data_summary(ctyByCommentsSummary, hwyByCommentsSummary),
-  bivariate_data_summary(ctyByMissSummary, hwyByMissSummary)
+    bivariate_data_summary(ctyBymanuSummary, hwyBymanuSummary),
+    bivariate_data_summary(ctyBymodelSummary, hwyBymodelSummary),
+    bivariate_data_summary(ctyByYearSummary, hwyByYearSummary),
+    bivariate_data_summary(ctyByCylSummary, hwyByCylSummary),
+    bivariate_data_summary(ctyBytransSummary, hwyBytransSummary),
+    bivariate_data_summary(ctyByDrvSummary, hwyByDrvSummary),
+    bivariate_data_summary(ctyByflSummary, hwyByflSummary),
+    bivariate_data_summary(ctyByclassSummary, hwyByclassSummary),
+    bivariate_data_summary(ctyByPartySummary, hwyByPartySummary),
+    bivariate_data_summary(ctyByCommentsSummary, hwyByCommentsSummary),
+    bivariate_data_summary(ctyByMissSummary, hwyByMissSummary)
 )
 
-kable(cars_bivariate_data_summary, caption = "By data summaries of miles per gallons for city and highway.", booktabs = TRUE, escape = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+kable(cars_bivariate_data_summary, caption = "By data summaries of miles per gallons for city and highway.", booktabs = TRUE, escape = FALSE, format = "html") %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 
 cars_bivariate_time_data_summary <- rbind(
-  bivariate_data_summary(ctyByPartySummary, rdifftimeByPartySummary),
-  bivariate_data_summary(ctyByCommentsSummary, rdifftimeByCommentsSummary)
+    bivariate_data_summary(ctyByPartySummary, rdifftimeByPartySummary),
+    bivariate_data_summary(ctyByCommentsSummary, rdifftimeByCommentsSummary)
 )
 
-kable(cars_bivariate_time_data_summary, caption = "By data summaries of miles per gallons for city and random difference in time.", booktabs = TRUE, escape = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+kable(cars_bivariate_time_data_summary, caption = "By data summaries of miles per gallons for city and random difference in time.", booktabs = TRUE, escape = FALSE, format = "html") %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
 ```
 
 # Session Info
